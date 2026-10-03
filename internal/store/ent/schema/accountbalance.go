@@ -30,6 +30,11 @@ func (AccountBalance) Fields() []ent.Field {
 		field.String("balance").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}).
 			Default("0"),
+		// Held is the portion credited but not spendable under an
+		// exposure-cap hold (risk-policy §4). Spendable = balance - held.
+		field.String("held").
+			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}).
+			Default("0"),
 		field.Bool("flagged").Default(false),
 		field.Int("version").Default(0),
 	}

@@ -31,7 +31,11 @@ type AssetConfig struct {
 	// NFinalize holds the value of the "n_finalize" field.
 	NFinalize int `json:"n_finalize,omitempty"`
 	// ReorgWindow holds the value of the "reorg_window" field.
-	ReorgWindow  int `json:"reorg_window,omitempty"`
+	ReorgWindow int `json:"reorg_window,omitempty"`
+	// ExposureCap holds the value of the "exposure_cap" field.
+	ExposureCap *string `json:"exposure_cap,omitempty"`
+	// TierAmount holds the value of the "tier_amount" field.
+	TierAmount   *string `json:"tier_amount,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -42,7 +46,7 @@ func (*AssetConfig) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case assetconfig.FieldID, assetconfig.FieldDecimals, assetconfig.FieldNCredit, assetconfig.FieldNFinalize, assetconfig.FieldReorgWindow:
 			values[i] = new(sql.NullInt64)
-		case assetconfig.FieldChain, assetconfig.FieldAsset, assetconfig.FieldMode, assetconfig.FieldMinAmount:
+		case assetconfig.FieldChain, assetconfig.FieldAsset, assetconfig.FieldMode, assetconfig.FieldMinAmount, assetconfig.FieldExposureCap, assetconfig.FieldTierAmount:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -113,6 +117,20 @@ func (_m *AssetConfig) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ReorgWindow = int(value.Int64)
 			}
+		case assetconfig.FieldExposureCap:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field exposure_cap", values[i])
+			} else if value.Valid {
+				_m.ExposureCap = new(string)
+				*_m.ExposureCap = value.String
+			}
+		case assetconfig.FieldTierAmount:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tier_amount", values[i])
+			} else if value.Valid {
+				_m.TierAmount = new(string)
+				*_m.TierAmount = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -172,6 +190,16 @@ func (_m *AssetConfig) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("reorg_window=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ReorgWindow))
+	builder.WriteString(", ")
+	if v := _m.ExposureCap; v != nil {
+		builder.WriteString("exposure_cap=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.TierAmount; v != nil {
+		builder.WriteString("tier_amount=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

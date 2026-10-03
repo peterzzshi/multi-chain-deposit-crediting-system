@@ -37,7 +37,7 @@ func TestApplyUnknownDeposit(t *testing.T) {
 func TestDebitDuplicateRefIsIdempotent(t *testing.T) {
 	txMock := mocks.NewMockTx(t)
 	txMock.On("BalanceForUpdate", mock.Anything, "alice", "ETH").
-		Return(big.NewInt(100), false, nil)
+		Return(credit.Balance{Amount: big.NewInt(100), Held: new(big.Int)}, nil)
 	txMock.On("InsertEntry", mock.Anything, mock.Anything).
 		Return(errs.ErrDuplicateRef)
 

@@ -69,6 +69,20 @@ func (_u *AccountBalanceUpdate) SetNillableBalance(v *string) *AccountBalanceUpd
 	return _u
 }
 
+// SetHeld sets the "held" field.
+func (_u *AccountBalanceUpdate) SetHeld(v string) *AccountBalanceUpdate {
+	_u.mutation.SetHeld(v)
+	return _u
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_u *AccountBalanceUpdate) SetNillableHeld(v *string) *AccountBalanceUpdate {
+	if v != nil {
+		_u.SetHeld(*v)
+	}
+	return _u
+}
+
 // SetFlagged sets the "flagged" field.
 func (_u *AccountBalanceUpdate) SetFlagged(v bool) *AccountBalanceUpdate {
 	_u.mutation.SetFlagged(v)
@@ -172,6 +186,9 @@ func (_u *AccountBalanceUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.Balance(); ok {
 		_spec.SetField(accountbalance.FieldBalance, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Held(); ok {
+		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Flagged(); ok {
 		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)
 	}
@@ -239,6 +256,20 @@ func (_u *AccountBalanceUpdateOne) SetBalance(v string) *AccountBalanceUpdateOne
 func (_u *AccountBalanceUpdateOne) SetNillableBalance(v *string) *AccountBalanceUpdateOne {
 	if v != nil {
 		_u.SetBalance(*v)
+	}
+	return _u
+}
+
+// SetHeld sets the "held" field.
+func (_u *AccountBalanceUpdateOne) SetHeld(v string) *AccountBalanceUpdateOne {
+	_u.mutation.SetHeld(v)
+	return _u
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_u *AccountBalanceUpdateOne) SetNillableHeld(v *string) *AccountBalanceUpdateOne {
+	if v != nil {
+		_u.SetHeld(*v)
 	}
 	return _u
 }
@@ -375,6 +406,9 @@ func (_u *AccountBalanceUpdateOne) sqlSave(ctx context.Context) (_node *AccountB
 	}
 	if value, ok := _u.mutation.Balance(); ok {
 		_spec.SetField(accountbalance.FieldBalance, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Held(); ok {
+		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Flagged(); ok {
 		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)

@@ -29,6 +29,10 @@ const (
 	FieldNFinalize = "n_finalize"
 	// FieldReorgWindow holds the string denoting the reorg_window field in the database.
 	FieldReorgWindow = "reorg_window"
+	// FieldExposureCap holds the string denoting the exposure_cap field in the database.
+	FieldExposureCap = "exposure_cap"
+	// FieldTierAmount holds the string denoting the tier_amount field in the database.
+	FieldTierAmount = "tier_amount"
 	// Table holds the table name of the assetconfig in the database.
 	Table = "asset_configs"
 )
@@ -44,6 +48,8 @@ var Columns = []string{
 	FieldNCredit,
 	FieldNFinalize,
 	FieldReorgWindow,
+	FieldExposureCap,
+	FieldTierAmount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -142,4 +148,14 @@ func ByNFinalize(opts ...sql.OrderTermOption) OrderOption {
 // ByReorgWindow orders the results by the reorg_window field.
 func ByReorgWindow(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldReorgWindow, opts...).ToFunc()
+}
+
+// ByExposureCap orders the results by the exposure_cap field.
+func ByExposureCap(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExposureCap, opts...).ToFunc()
+}
+
+// ByTierAmount orders the results by the tier_amount field.
+func ByTierAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTierAmount, opts...).ToFunc()
 }

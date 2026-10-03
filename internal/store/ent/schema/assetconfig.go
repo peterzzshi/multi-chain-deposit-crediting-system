@@ -27,6 +27,16 @@ func (AssetConfig) Fields() []ent.Field {
 		field.Int("n_credit").Positive(),
 		field.Int("n_finalize").Positive(),
 		field.Int("reorg_window").Positive(),
+		// Exposure cap E_max in base units; null disables enforcement
+		// (risk-policy §2/§4).
+		field.String("exposure_cap").
+			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}).
+			Optional().Nillable(),
+		// Credits at or above the tier are spendability-held while the cap
+		// is breached; null holds all credits during a breach.
+		field.String("tier_amount").
+			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}).
+			Optional().Nillable(),
 	}
 }
 

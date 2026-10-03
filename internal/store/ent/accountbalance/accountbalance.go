@@ -17,6 +17,8 @@ const (
 	FieldAsset = "asset"
 	// FieldBalance holds the string denoting the balance field in the database.
 	FieldBalance = "balance"
+	// FieldHeld holds the string denoting the held field in the database.
+	FieldHeld = "held"
 	// FieldFlagged holds the string denoting the flagged field in the database.
 	FieldFlagged = "flagged"
 	// FieldVersion holds the string denoting the version field in the database.
@@ -31,6 +33,7 @@ var Columns = []string{
 	FieldAccount,
 	FieldAsset,
 	FieldBalance,
+	FieldHeld,
 	FieldFlagged,
 	FieldVersion,
 }
@@ -52,6 +55,8 @@ var (
 	AssetValidator func(string) error
 	// DefaultBalance holds the default value on creation for the "balance" field.
 	DefaultBalance string
+	// DefaultHeld holds the default value on creation for the "held" field.
+	DefaultHeld string
 	// DefaultFlagged holds the default value on creation for the "flagged" field.
 	DefaultFlagged bool
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -79,6 +84,11 @@ func ByAsset(opts ...sql.OrderTermOption) OrderOption {
 // ByBalance orders the results by the balance field.
 func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalance, opts...).ToFunc()
+}
+
+// ByHeld orders the results by the held field.
+func ByHeld(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHeld, opts...).ToFunc()
 }
 
 // ByFlagged orders the results by the flagged field.

@@ -19,4 +19,4 @@ generate:
 	go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/lock --target ./internal/store/ent ./internal/store/ent/schema
 
 mock:
-	go run github.com/vektra/mockery/v3@v3.8.0
+	GOPROXY=https://goproxy.cn,direct go run github.com/vektra/mockery/v3@v3.8.0

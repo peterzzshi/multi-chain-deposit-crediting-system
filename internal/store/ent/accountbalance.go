@@ -22,6 +22,8 @@ type AccountBalance struct {
 	Asset string `json:"asset,omitempty"`
 	// Balance holds the value of the "balance" field.
 	Balance string `json:"balance,omitempty"`
+	// Held holds the value of the "held" field.
+	Held string `json:"held,omitempty"`
 	// Flagged holds the value of the "flagged" field.
 	Flagged bool `json:"flagged,omitempty"`
 	// Version holds the value of the "version" field.
@@ -38,7 +40,7 @@ func (*AccountBalance) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case accountbalance.FieldID, accountbalance.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case accountbalance.FieldAccount, accountbalance.FieldAsset, accountbalance.FieldBalance:
+		case accountbalance.FieldAccount, accountbalance.FieldAsset, accountbalance.FieldBalance, accountbalance.FieldHeld:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -78,6 +80,12 @@ func (_m *AccountBalance) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field balance", values[i])
 			} else if value.Valid {
 				_m.Balance = value.String
+			}
+		case accountbalance.FieldHeld:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field held", values[i])
+			} else if value.Valid {
+				_m.Held = value.String
 			}
 		case accountbalance.FieldFlagged:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -135,6 +143,9 @@ func (_m *AccountBalance) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("balance=")
 	builder.WriteString(_m.Balance)
+	builder.WriteString(", ")
+	builder.WriteString("held=")
+	builder.WriteString(_m.Held)
 	builder.WriteString(", ")
 	builder.WriteString("flagged=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Flagged))

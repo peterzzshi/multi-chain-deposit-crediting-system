@@ -17,6 +17,7 @@ import (
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
+	"deposit-crediting/internal/store/ent/exposurestate"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 	"deposit-crediting/internal/store/ent/sourceevent"
 
@@ -42,6 +43,8 @@ type Client struct {
 	Deposit *DepositClient
 	// DepositAddress is the client for interacting with the DepositAddress builders.
 	DepositAddress *DepositAddressClient
+	// ExposureState is the client for interacting with the ExposureState builders.
+	ExposureState *ExposureStateClient
 	// LedgerEntry is the client for interacting with the LedgerEntry builders.
 	LedgerEntry *LedgerEntryClient
 	// SourceEvent is the client for interacting with the SourceEvent builders.
@@ -63,6 +66,7 @@ func (c *Client) init() {
 	c.ChainCursor = NewChainCursorClient(c.config)
 	c.Deposit = NewDepositClient(c.config)
 	c.DepositAddress = NewDepositAddressClient(c.config)
+	c.ExposureState = NewExposureStateClient(c.config)
 	c.LedgerEntry = NewLedgerEntryClient(c.config)
 	c.SourceEvent = NewSourceEventClient(c.config)
 }
@@ -163,6 +167,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
+		ExposureState:  NewExposureStateClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
 		SourceEvent:    NewSourceEventClient(cfg),
 	}, nil
@@ -190,6 +195,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
+		ExposureState:  NewExposureStateClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
 		SourceEvent:    NewSourceEventClient(cfg),
 	}, nil
@@ -222,7 +228,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.LedgerEntry, c.SourceEvent,
+		c.DepositAddress, c.ExposureState, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Use(hooks...)
 	}
@@ -233,7 +239,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.LedgerEntry, c.SourceEvent,
+		c.DepositAddress, c.ExposureState, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -254,6 +260,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Deposit.mutate(ctx, m)
 	case *DepositAddressMutation:
 		return c.DepositAddress.mutate(ctx, m)
+	case *ExposureStateMutation:
+		return c.ExposureState.mutate(ctx, m)
 	case *LedgerEntryMutation:
 		return c.LedgerEntry.mutate(ctx, m)
 	case *SourceEventMutation:
@@ -1061,6 +1069,139 @@ func (c *DepositAddressClient) mutate(ctx context.Context, m *DepositAddressMuta
 	}
 }
 
+// ExposureStateClient is a client for the ExposureState schema.
+type ExposureStateClient struct {
+	config
+}
+
+// NewExposureStateClient returns a client for the ExposureState from the given config.
+func NewExposureStateClient(c config) *ExposureStateClient {
+	return &ExposureStateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `exposurestate.Hooks(f(g(h())))`.
+func (c *ExposureStateClient) Use(hooks ...Hook) {
+	c.hooks.ExposureState = append(c.hooks.ExposureState, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `exposurestate.Intercept(f(g(h())))`.
+func (c *ExposureStateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExposureState = append(c.inters.ExposureState, interceptors...)
+}
+
+// Create returns a builder for creating a ExposureState entity.
+func (c *ExposureStateClient) Create() *ExposureStateCreate {
+	mutation := newExposureStateMutation(c.config, OpCreate)
+	return &ExposureStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExposureState entities.
+func (c *ExposureStateClient) CreateBulk(builders ...*ExposureStateCreate) *ExposureStateCreateBulk {
+	return &ExposureStateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExposureStateClient) MapCreateBulk(slice any, setFunc func(*ExposureStateCreate, int)) *ExposureStateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExposureStateCreateBulk{err: fmt.Errorf("calling to ExposureStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExposureStateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExposureStateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExposureState.
+func (c *ExposureStateClient) Update() *ExposureStateUpdate {
+	mutation := newExposureStateMutation(c.config, OpUpdate)
+	return &ExposureStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExposureStateClient) UpdateOne(_m *ExposureState) *ExposureStateUpdateOne {
+	mutation := newExposureStateMutation(c.config, OpUpdateOne, withExposureState(_m))
+	return &ExposureStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExposureStateClient) UpdateOneID(id int) *ExposureStateUpdateOne {
+	mutation := newExposureStateMutation(c.config, OpUpdateOne, withExposureStateID(id))
+	return &ExposureStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExposureState.
+func (c *ExposureStateClient) Delete() *ExposureStateDelete {
+	mutation := newExposureStateMutation(c.config, OpDelete)
+	return &ExposureStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExposureStateClient) DeleteOne(_m *ExposureState) *ExposureStateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExposureStateClient) DeleteOneID(id int) *ExposureStateDeleteOne {
+	builder := c.Delete().Where(exposurestate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExposureStateDeleteOne{builder}
+}
+
+// Query returns a query builder for ExposureState.
+func (c *ExposureStateClient) Query() *ExposureStateQuery {
+	return &ExposureStateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExposureState},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExposureState entity by its id.
+func (c *ExposureStateClient) Get(ctx context.Context, id int) (*ExposureState, error) {
+	return c.Query().Where(exposurestate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExposureStateClient) GetX(ctx context.Context, id int) *ExposureState {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ExposureStateClient) Hooks() []Hook {
+	return c.hooks.ExposureState
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExposureStateClient) Interceptors() []Interceptor {
+	return c.inters.ExposureState
+}
+
+func (c *ExposureStateClient) mutate(ctx context.Context, m *ExposureStateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExposureStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExposureStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExposureStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExposureStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExposureState mutation op: %q", m.Op())
+	}
+}
+
 // LedgerEntryClient is a client for the LedgerEntry schema.
 type LedgerEntryClient struct {
 	config
@@ -1331,10 +1472,10 @@ func (c *SourceEventClient) mutate(ctx context.Context, m *SourceEventMutation) 
 type (
 	hooks struct {
 		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, LedgerEntry, SourceEvent []ent.Hook
+		DepositAddress, ExposureState, LedgerEntry, SourceEvent []ent.Hook
 	}
 	inters struct {
 		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, LedgerEntry, SourceEvent []ent.Interceptor
+		DepositAddress, ExposureState, LedgerEntry, SourceEvent []ent.Interceptor
 	}
 )

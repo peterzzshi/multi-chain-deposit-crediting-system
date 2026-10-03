@@ -10,6 +10,7 @@ import (
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
+	"deposit-crediting/internal/store/ent/exposurestate"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 	"deposit-crediting/internal/store/ent/predicate"
 	"deposit-crediting/internal/store/ent/sourceevent"
@@ -38,6 +39,7 @@ const (
 	TypeChainCursor    = "ChainCursor"
 	TypeDeposit        = "Deposit"
 	TypeDepositAddress = "DepositAddress"
+	TypeExposureState  = "ExposureState"
 	TypeLedgerEntry    = "LedgerEntry"
 	TypeSourceEvent    = "SourceEvent"
 )
@@ -51,6 +53,7 @@ type AccountBalanceMutation struct {
 	account       *string
 	asset         *string
 	balance       *string
+	held          *string
 	flagged       *bool
 	version       *int
 	addversion    *int
@@ -266,6 +269,42 @@ func (m *AccountBalanceMutation) ResetBalance() {
 	m.balance = nil
 }
 
+// SetHeld sets the "held" field.
+func (m *AccountBalanceMutation) SetHeld(s string) {
+	m.held = &s
+}
+
+// Held returns the value of the "held" field in the mutation.
+func (m *AccountBalanceMutation) Held() (r string, exists bool) {
+	v := m.held
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeld returns the old "held" field's value of the AccountBalance entity.
+// If the AccountBalance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountBalanceMutation) OldHeld(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeld is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeld requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeld: %w", err)
+	}
+	return oldValue.Held, nil
+}
+
+// ResetHeld resets all changes to the "held" field.
+func (m *AccountBalanceMutation) ResetHeld() {
+	m.held = nil
+}
+
 // SetFlagged sets the "flagged" field.
 func (m *AccountBalanceMutation) SetFlagged(b bool) {
 	m.flagged = &b
@@ -392,7 +431,7 @@ func (m *AccountBalanceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountBalanceMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.account != nil {
 		fields = append(fields, accountbalance.FieldAccount)
 	}
@@ -401,6 +440,9 @@ func (m *AccountBalanceMutation) Fields() []string {
 	}
 	if m.balance != nil {
 		fields = append(fields, accountbalance.FieldBalance)
+	}
+	if m.held != nil {
+		fields = append(fields, accountbalance.FieldHeld)
 	}
 	if m.flagged != nil {
 		fields = append(fields, accountbalance.FieldFlagged)
@@ -422,6 +464,8 @@ func (m *AccountBalanceMutation) Field(name string) (ent.Value, bool) {
 		return m.Asset()
 	case accountbalance.FieldBalance:
 		return m.Balance()
+	case accountbalance.FieldHeld:
+		return m.Held()
 	case accountbalance.FieldFlagged:
 		return m.Flagged()
 	case accountbalance.FieldVersion:
@@ -441,6 +485,8 @@ func (m *AccountBalanceMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldAsset(ctx)
 	case accountbalance.FieldBalance:
 		return m.OldBalance(ctx)
+	case accountbalance.FieldHeld:
+		return m.OldHeld(ctx)
 	case accountbalance.FieldFlagged:
 		return m.OldFlagged(ctx)
 	case accountbalance.FieldVersion:
@@ -474,6 +520,13 @@ func (m *AccountBalanceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBalance(v)
+		return nil
+	case accountbalance.FieldHeld:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeld(v)
 		return nil
 	case accountbalance.FieldFlagged:
 		v, ok := value.(bool)
@@ -562,6 +615,9 @@ func (m *AccountBalanceMutation) ResetField(name string) error {
 	case accountbalance.FieldBalance:
 		m.ResetBalance()
 		return nil
+	case accountbalance.FieldHeld:
+		m.ResetHeld()
+		return nil
 	case accountbalance.FieldFlagged:
 		m.ResetFlagged()
 		return nil
@@ -638,6 +694,8 @@ type AssetConfigMutation struct {
 	addn_finalize   *int
 	reorg_window    *int
 	addreorg_window *int
+	exposure_cap    *string
+	tier_amount     *string
 	clearedFields   map[string]struct{}
 	done            bool
 	oldValue        func(context.Context) (*AssetConfig, error)
@@ -1110,6 +1168,104 @@ func (m *AssetConfigMutation) ResetReorgWindow() {
 	m.addreorg_window = nil
 }
 
+// SetExposureCap sets the "exposure_cap" field.
+func (m *AssetConfigMutation) SetExposureCap(s string) {
+	m.exposure_cap = &s
+}
+
+// ExposureCap returns the value of the "exposure_cap" field in the mutation.
+func (m *AssetConfigMutation) ExposureCap() (r string, exists bool) {
+	v := m.exposure_cap
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExposureCap returns the old "exposure_cap" field's value of the AssetConfig entity.
+// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetConfigMutation) OldExposureCap(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExposureCap is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExposureCap requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExposureCap: %w", err)
+	}
+	return oldValue.ExposureCap, nil
+}
+
+// ClearExposureCap clears the value of the "exposure_cap" field.
+func (m *AssetConfigMutation) ClearExposureCap() {
+	m.exposure_cap = nil
+	m.clearedFields[assetconfig.FieldExposureCap] = struct{}{}
+}
+
+// ExposureCapCleared returns if the "exposure_cap" field was cleared in this mutation.
+func (m *AssetConfigMutation) ExposureCapCleared() bool {
+	_, ok := m.clearedFields[assetconfig.FieldExposureCap]
+	return ok
+}
+
+// ResetExposureCap resets all changes to the "exposure_cap" field.
+func (m *AssetConfigMutation) ResetExposureCap() {
+	m.exposure_cap = nil
+	delete(m.clearedFields, assetconfig.FieldExposureCap)
+}
+
+// SetTierAmount sets the "tier_amount" field.
+func (m *AssetConfigMutation) SetTierAmount(s string) {
+	m.tier_amount = &s
+}
+
+// TierAmount returns the value of the "tier_amount" field in the mutation.
+func (m *AssetConfigMutation) TierAmount() (r string, exists bool) {
+	v := m.tier_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTierAmount returns the old "tier_amount" field's value of the AssetConfig entity.
+// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetConfigMutation) OldTierAmount(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTierAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTierAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTierAmount: %w", err)
+	}
+	return oldValue.TierAmount, nil
+}
+
+// ClearTierAmount clears the value of the "tier_amount" field.
+func (m *AssetConfigMutation) ClearTierAmount() {
+	m.tier_amount = nil
+	m.clearedFields[assetconfig.FieldTierAmount] = struct{}{}
+}
+
+// TierAmountCleared returns if the "tier_amount" field was cleared in this mutation.
+func (m *AssetConfigMutation) TierAmountCleared() bool {
+	_, ok := m.clearedFields[assetconfig.FieldTierAmount]
+	return ok
+}
+
+// ResetTierAmount resets all changes to the "tier_amount" field.
+func (m *AssetConfigMutation) ResetTierAmount() {
+	m.tier_amount = nil
+	delete(m.clearedFields, assetconfig.FieldTierAmount)
+}
+
 // Where appends a list predicates to the AssetConfigMutation builder.
 func (m *AssetConfigMutation) Where(ps ...predicate.AssetConfig) {
 	m.predicates = append(m.predicates, ps...)
@@ -1144,7 +1300,7 @@ func (m *AssetConfigMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetConfigMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 10)
 	if m.chain != nil {
 		fields = append(fields, assetconfig.FieldChain)
 	}
@@ -1168,6 +1324,12 @@ func (m *AssetConfigMutation) Fields() []string {
 	}
 	if m.reorg_window != nil {
 		fields = append(fields, assetconfig.FieldReorgWindow)
+	}
+	if m.exposure_cap != nil {
+		fields = append(fields, assetconfig.FieldExposureCap)
+	}
+	if m.tier_amount != nil {
+		fields = append(fields, assetconfig.FieldTierAmount)
 	}
 	return fields
 }
@@ -1193,6 +1355,10 @@ func (m *AssetConfigMutation) Field(name string) (ent.Value, bool) {
 		return m.NFinalize()
 	case assetconfig.FieldReorgWindow:
 		return m.ReorgWindow()
+	case assetconfig.FieldExposureCap:
+		return m.ExposureCap()
+	case assetconfig.FieldTierAmount:
+		return m.TierAmount()
 	}
 	return nil, false
 }
@@ -1218,6 +1384,10 @@ func (m *AssetConfigMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldNFinalize(ctx)
 	case assetconfig.FieldReorgWindow:
 		return m.OldReorgWindow(ctx)
+	case assetconfig.FieldExposureCap:
+		return m.OldExposureCap(ctx)
+	case assetconfig.FieldTierAmount:
+		return m.OldTierAmount(ctx)
 	}
 	return nil, fmt.Errorf("unknown AssetConfig field %s", name)
 }
@@ -1282,6 +1452,20 @@ func (m *AssetConfigMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetReorgWindow(v)
+		return nil
+	case assetconfig.FieldExposureCap:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExposureCap(v)
+		return nil
+	case assetconfig.FieldTierAmount:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTierAmount(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AssetConfig field %s", name)
@@ -1363,7 +1547,14 @@ func (m *AssetConfigMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *AssetConfigMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(assetconfig.FieldExposureCap) {
+		fields = append(fields, assetconfig.FieldExposureCap)
+	}
+	if m.FieldCleared(assetconfig.FieldTierAmount) {
+		fields = append(fields, assetconfig.FieldTierAmount)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -1376,6 +1567,14 @@ func (m *AssetConfigMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *AssetConfigMutation) ClearField(name string) error {
+	switch name {
+	case assetconfig.FieldExposureCap:
+		m.ClearExposureCap()
+		return nil
+	case assetconfig.FieldTierAmount:
+		m.ClearTierAmount()
+		return nil
+	}
 	return fmt.Errorf("unknown AssetConfig nullable field %s", name)
 }
 
@@ -1406,6 +1605,12 @@ func (m *AssetConfigMutation) ResetField(name string) error {
 		return nil
 	case assetconfig.FieldReorgWindow:
 		m.ResetReorgWindow()
+		return nil
+	case assetconfig.FieldExposureCap:
+		m.ResetExposureCap()
+		return nil
+	case assetconfig.FieldTierAmount:
+		m.ResetTierAmount()
 		return nil
 	}
 	return fmt.Errorf("unknown AssetConfig field %s", name)
@@ -2422,6 +2627,7 @@ type DepositMutation struct {
 	addreorged_height *int64
 	tx_hash           *string
 	source_event      *string
+	held              *bool
 	created_at        *time.Time
 	updated_at        *time.Time
 	clearedFields     map[string]struct{}
@@ -3159,6 +3365,42 @@ func (m *DepositMutation) ResetSourceEvent() {
 	delete(m.clearedFields, deposit.FieldSourceEvent)
 }
 
+// SetHeld sets the "held" field.
+func (m *DepositMutation) SetHeld(b bool) {
+	m.held = &b
+}
+
+// Held returns the value of the "held" field in the mutation.
+func (m *DepositMutation) Held() (r bool, exists bool) {
+	v := m.held
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeld returns the old "held" field's value of the Deposit entity.
+// If the Deposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DepositMutation) OldHeld(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeld is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeld requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeld: %w", err)
+	}
+	return oldValue.Held, nil
+}
+
+// ResetHeld resets all changes to the "held" field.
+func (m *DepositMutation) ResetHeld() {
+	m.held = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *DepositMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -3265,7 +3507,7 @@ func (m *DepositMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DepositMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.transfer_id != nil {
 		fields = append(fields, deposit.FieldTransferID)
 	}
@@ -3307,6 +3549,9 @@ func (m *DepositMutation) Fields() []string {
 	}
 	if m.source_event != nil {
 		fields = append(fields, deposit.FieldSourceEvent)
+	}
+	if m.held != nil {
+		fields = append(fields, deposit.FieldHeld)
 	}
 	if m.created_at != nil {
 		fields = append(fields, deposit.FieldCreatedAt)
@@ -3350,6 +3595,8 @@ func (m *DepositMutation) Field(name string) (ent.Value, bool) {
 		return m.TxHash()
 	case deposit.FieldSourceEvent:
 		return m.SourceEvent()
+	case deposit.FieldHeld:
+		return m.Held()
 	case deposit.FieldCreatedAt:
 		return m.CreatedAt()
 	case deposit.FieldUpdatedAt:
@@ -3391,6 +3638,8 @@ func (m *DepositMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTxHash(ctx)
 	case deposit.FieldSourceEvent:
 		return m.OldSourceEvent(ctx)
+	case deposit.FieldHeld:
+		return m.OldHeld(ctx)
 	case deposit.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case deposit.FieldUpdatedAt:
@@ -3501,6 +3750,13 @@ func (m *DepositMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSourceEvent(v)
+		return nil
+	case deposit.FieldHeld:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeld(v)
 		return nil
 	case deposit.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -3678,6 +3934,9 @@ func (m *DepositMutation) ResetField(name string) error {
 		return nil
 	case deposit.FieldSourceEvent:
 		m.ResetSourceEvent()
+		return nil
+	case deposit.FieldHeld:
+		m.ResetHeld()
 		return nil
 	case deposit.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -4277,6 +4536,548 @@ func (m *DepositAddressMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *DepositAddressMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown DepositAddress edge %s", name)
+}
+
+// ExposureStateMutation represents an operation that mutates the ExposureState nodes in the graph.
+type ExposureStateMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	chain         *string
+	asset         *string
+	holds_active  *bool
+	exposure      *string
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*ExposureState, error)
+	predicates    []predicate.ExposureState
+}
+
+var _ ent.Mutation = (*ExposureStateMutation)(nil)
+
+// exposurestateOption allows management of the mutation configuration using functional options.
+type exposurestateOption func(*ExposureStateMutation)
+
+// newExposureStateMutation creates new mutation for the ExposureState entity.
+func newExposureStateMutation(c config, op Op, opts ...exposurestateOption) *ExposureStateMutation {
+	m := &ExposureStateMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeExposureState,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withExposureStateID sets the ID field of the mutation.
+func withExposureStateID(id int) exposurestateOption {
+	return func(m *ExposureStateMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ExposureState
+		)
+		m.oldValue = func(ctx context.Context) (*ExposureState, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ExposureState.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withExposureState sets the old ExposureState of the mutation.
+func withExposureState(node *ExposureState) exposurestateOption {
+	return func(m *ExposureStateMutation) {
+		m.oldValue = func(context.Context) (*ExposureState, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ExposureStateMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ExposureStateMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ExposureStateMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ExposureStateMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ExposureState.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetChain sets the "chain" field.
+func (m *ExposureStateMutation) SetChain(s string) {
+	m.chain = &s
+}
+
+// Chain returns the value of the "chain" field in the mutation.
+func (m *ExposureStateMutation) Chain() (r string, exists bool) {
+	v := m.chain
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChain returns the old "chain" field's value of the ExposureState entity.
+// If the ExposureState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExposureStateMutation) OldChain(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChain is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChain requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChain: %w", err)
+	}
+	return oldValue.Chain, nil
+}
+
+// ResetChain resets all changes to the "chain" field.
+func (m *ExposureStateMutation) ResetChain() {
+	m.chain = nil
+}
+
+// SetAsset sets the "asset" field.
+func (m *ExposureStateMutation) SetAsset(s string) {
+	m.asset = &s
+}
+
+// Asset returns the value of the "asset" field in the mutation.
+func (m *ExposureStateMutation) Asset() (r string, exists bool) {
+	v := m.asset
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAsset returns the old "asset" field's value of the ExposureState entity.
+// If the ExposureState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExposureStateMutation) OldAsset(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAsset is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAsset requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAsset: %w", err)
+	}
+	return oldValue.Asset, nil
+}
+
+// ResetAsset resets all changes to the "asset" field.
+func (m *ExposureStateMutation) ResetAsset() {
+	m.asset = nil
+}
+
+// SetHoldsActive sets the "holds_active" field.
+func (m *ExposureStateMutation) SetHoldsActive(b bool) {
+	m.holds_active = &b
+}
+
+// HoldsActive returns the value of the "holds_active" field in the mutation.
+func (m *ExposureStateMutation) HoldsActive() (r bool, exists bool) {
+	v := m.holds_active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHoldsActive returns the old "holds_active" field's value of the ExposureState entity.
+// If the ExposureState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExposureStateMutation) OldHoldsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHoldsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHoldsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHoldsActive: %w", err)
+	}
+	return oldValue.HoldsActive, nil
+}
+
+// ResetHoldsActive resets all changes to the "holds_active" field.
+func (m *ExposureStateMutation) ResetHoldsActive() {
+	m.holds_active = nil
+}
+
+// SetExposure sets the "exposure" field.
+func (m *ExposureStateMutation) SetExposure(s string) {
+	m.exposure = &s
+}
+
+// Exposure returns the value of the "exposure" field in the mutation.
+func (m *ExposureStateMutation) Exposure() (r string, exists bool) {
+	v := m.exposure
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExposure returns the old "exposure" field's value of the ExposureState entity.
+// If the ExposureState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExposureStateMutation) OldExposure(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExposure is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExposure requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExposure: %w", err)
+	}
+	return oldValue.Exposure, nil
+}
+
+// ResetExposure resets all changes to the "exposure" field.
+func (m *ExposureStateMutation) ResetExposure() {
+	m.exposure = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ExposureStateMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ExposureStateMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ExposureState entity.
+// If the ExposureState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExposureStateMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ExposureStateMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the ExposureStateMutation builder.
+func (m *ExposureStateMutation) Where(ps ...predicate.ExposureState) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ExposureStateMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ExposureStateMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ExposureState, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ExposureStateMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ExposureStateMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ExposureState).
+func (m *ExposureStateMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ExposureStateMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.chain != nil {
+		fields = append(fields, exposurestate.FieldChain)
+	}
+	if m.asset != nil {
+		fields = append(fields, exposurestate.FieldAsset)
+	}
+	if m.holds_active != nil {
+		fields = append(fields, exposurestate.FieldHoldsActive)
+	}
+	if m.exposure != nil {
+		fields = append(fields, exposurestate.FieldExposure)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, exposurestate.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ExposureStateMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case exposurestate.FieldChain:
+		return m.Chain()
+	case exposurestate.FieldAsset:
+		return m.Asset()
+	case exposurestate.FieldHoldsActive:
+		return m.HoldsActive()
+	case exposurestate.FieldExposure:
+		return m.Exposure()
+	case exposurestate.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ExposureStateMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case exposurestate.FieldChain:
+		return m.OldChain(ctx)
+	case exposurestate.FieldAsset:
+		return m.OldAsset(ctx)
+	case exposurestate.FieldHoldsActive:
+		return m.OldHoldsActive(ctx)
+	case exposurestate.FieldExposure:
+		return m.OldExposure(ctx)
+	case exposurestate.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ExposureState field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExposureStateMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case exposurestate.FieldChain:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChain(v)
+		return nil
+	case exposurestate.FieldAsset:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAsset(v)
+		return nil
+	case exposurestate.FieldHoldsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHoldsActive(v)
+		return nil
+	case exposurestate.FieldExposure:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExposure(v)
+		return nil
+	case exposurestate.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ExposureState field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ExposureStateMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ExposureStateMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExposureStateMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ExposureState numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ExposureStateMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ExposureStateMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ExposureStateMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ExposureState nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ExposureStateMutation) ResetField(name string) error {
+	switch name {
+	case exposurestate.FieldChain:
+		m.ResetChain()
+		return nil
+	case exposurestate.FieldAsset:
+		m.ResetAsset()
+		return nil
+	case exposurestate.FieldHoldsActive:
+		m.ResetHoldsActive()
+		return nil
+	case exposurestate.FieldExposure:
+		m.ResetExposure()
+		return nil
+	case exposurestate.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ExposureState field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ExposureStateMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ExposureStateMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ExposureStateMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ExposureStateMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ExposureStateMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ExposureStateMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ExposureStateMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ExposureState unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ExposureStateMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ExposureState edge %s", name)
 }
 
 // LedgerEntryMutation represents an operation that mutates the LedgerEntry nodes in the graph.

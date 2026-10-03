@@ -24,6 +24,9 @@ type Deposit func(*sql.Selector)
 // DepositAddress is the predicate function for depositaddress builders.
 type DepositAddress func(*sql.Selector)
 
+// ExposureState is the predicate function for exposurestate builders.
+type ExposureState func(*sql.Selector)
+
 // LedgerEntry is the predicate function for ledgerentry builders.
 type LedgerEntry func(*sql.Selector)
 

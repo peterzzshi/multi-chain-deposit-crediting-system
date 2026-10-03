@@ -10,6 +10,7 @@ import (
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
+	"deposit-crediting/internal/store/ent/exposurestate"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 	"deposit-crediting/internal/store/ent/sourceevent"
 	"errors"
@@ -86,6 +87,7 @@ func checkColumn(t, c string) error {
 			chaincursor.Table:    chaincursor.ValidColumn,
 			deposit.Table:        deposit.ValidColumn,
 			depositaddress.Table: depositaddress.ValidColumn,
+			exposurestate.Table:  exposurestate.ValidColumn,
 			ledgerentry.Table:    ledgerentry.ValidColumn,
 			sourceevent.Table:    sourceevent.ValidColumn,
 		})

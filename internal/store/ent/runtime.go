@@ -9,6 +9,7 @@ import (
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
+	"deposit-crediting/internal/store/ent/exposurestate"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 	"deposit-crediting/internal/store/ent/schema"
 	"deposit-crediting/internal/store/ent/sourceevent"
@@ -33,12 +34,16 @@ func init() {
 	accountbalanceDescBalance := accountbalanceFields[2].Descriptor()
 	// accountbalance.DefaultBalance holds the default value on creation for the balance field.
 	accountbalance.DefaultBalance = accountbalanceDescBalance.Default.(string)
+	// accountbalanceDescHeld is the schema descriptor for held field.
+	accountbalanceDescHeld := accountbalanceFields[3].Descriptor()
+	// accountbalance.DefaultHeld holds the default value on creation for the held field.
+	accountbalance.DefaultHeld = accountbalanceDescHeld.Default.(string)
 	// accountbalanceDescFlagged is the schema descriptor for flagged field.
-	accountbalanceDescFlagged := accountbalanceFields[3].Descriptor()
+	accountbalanceDescFlagged := accountbalanceFields[4].Descriptor()
 	// accountbalance.DefaultFlagged holds the default value on creation for the flagged field.
 	accountbalance.DefaultFlagged = accountbalanceDescFlagged.Default.(bool)
 	// accountbalanceDescVersion is the schema descriptor for version field.
-	accountbalanceDescVersion := accountbalanceFields[4].Descriptor()
+	accountbalanceDescVersion := accountbalanceFields[5].Descriptor()
 	// accountbalance.DefaultVersion holds the default value on creation for the version field.
 	accountbalance.DefaultVersion = accountbalanceDescVersion.Default.(int)
 	assetconfigFields := schema.AssetConfig{}.Fields()
@@ -125,12 +130,16 @@ func init() {
 	depositDescCreditCycle := depositFields[8].Descriptor()
 	// deposit.DefaultCreditCycle holds the default value on creation for the credit_cycle field.
 	deposit.DefaultCreditCycle = depositDescCreditCycle.Default.(int)
+	// depositDescHeld is the schema descriptor for held field.
+	depositDescHeld := depositFields[14].Descriptor()
+	// deposit.DefaultHeld holds the default value on creation for the held field.
+	deposit.DefaultHeld = depositDescHeld.Default.(bool)
 	// depositDescCreatedAt is the schema descriptor for created_at field.
-	depositDescCreatedAt := depositFields[14].Descriptor()
+	depositDescCreatedAt := depositFields[15].Descriptor()
 	// deposit.DefaultCreatedAt holds the default value on creation for the created_at field.
 	deposit.DefaultCreatedAt = depositDescCreatedAt.Default.(func() time.Time)
 	// depositDescUpdatedAt is the schema descriptor for updated_at field.
-	depositDescUpdatedAt := depositFields[15].Descriptor()
+	depositDescUpdatedAt := depositFields[16].Descriptor()
 	// deposit.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	deposit.DefaultUpdatedAt = depositDescUpdatedAt.Default.(func() time.Time)
 	// deposit.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -153,6 +162,30 @@ func init() {
 	depositaddressDescActive := depositaddressFields[4].Descriptor()
 	// depositaddress.DefaultActive holds the default value on creation for the active field.
 	depositaddress.DefaultActive = depositaddressDescActive.Default.(bool)
+	exposurestateFields := schema.ExposureState{}.Fields()
+	_ = exposurestateFields
+	// exposurestateDescChain is the schema descriptor for chain field.
+	exposurestateDescChain := exposurestateFields[0].Descriptor()
+	// exposurestate.ChainValidator is a validator for the "chain" field. It is called by the builders before save.
+	exposurestate.ChainValidator = exposurestateDescChain.Validators[0].(func(string) error)
+	// exposurestateDescAsset is the schema descriptor for asset field.
+	exposurestateDescAsset := exposurestateFields[1].Descriptor()
+	// exposurestate.AssetValidator is a validator for the "asset" field. It is called by the builders before save.
+	exposurestate.AssetValidator = exposurestateDescAsset.Validators[0].(func(string) error)
+	// exposurestateDescHoldsActive is the schema descriptor for holds_active field.
+	exposurestateDescHoldsActive := exposurestateFields[2].Descriptor()
+	// exposurestate.DefaultHoldsActive holds the default value on creation for the holds_active field.
+	exposurestate.DefaultHoldsActive = exposurestateDescHoldsActive.Default.(bool)
+	// exposurestateDescExposure is the schema descriptor for exposure field.
+	exposurestateDescExposure := exposurestateFields[3].Descriptor()
+	// exposurestate.DefaultExposure holds the default value on creation for the exposure field.
+	exposurestate.DefaultExposure = exposurestateDescExposure.Default.(string)
+	// exposurestateDescUpdatedAt is the schema descriptor for updated_at field.
+	exposurestateDescUpdatedAt := exposurestateFields[4].Descriptor()
+	// exposurestate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	exposurestate.DefaultUpdatedAt = exposurestateDescUpdatedAt.Default.(func() time.Time)
+	// exposurestate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	exposurestate.UpdateDefaultUpdatedAt = exposurestateDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ledgerentryFields := schema.LedgerEntry{}.Fields()
 	_ = ledgerentryFields
 	// ledgerentryDescAccount is the schema descriptor for account field.

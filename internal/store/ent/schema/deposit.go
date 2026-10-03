@@ -41,6 +41,9 @@ func (Deposit) Fields() []ent.Field {
 		// Originating custodian source event (provider:provider_event_id)
 		// for audit; empty in self-built mode.
 		field.String("source_event").Optional().Nillable(),
+		// Held means the credit posted but is not spendable: an exposure
+		// cap hold was active at credit time (risk-policy §4).
+		field.Bool("held").Default(false),
 		field.Time("created_at").Default(timeNow).Immutable(),
 		field.Time("updated_at").Default(timeNow).UpdateDefault(timeNow),
 	}

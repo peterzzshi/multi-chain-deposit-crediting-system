@@ -88,6 +88,16 @@ func ReorgWindow(v int) predicate.AssetConfig {
 	return predicate.AssetConfig(sql.FieldEQ(FieldReorgWindow, v))
 }
 
+// ExposureCap applies equality check predicate on the "exposure_cap" field. It's identical to ExposureCapEQ.
+func ExposureCap(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEQ(FieldExposureCap, v))
+}
+
+// TierAmount applies equality check predicate on the "tier_amount" field. It's identical to TierAmountEQ.
+func TierAmount(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEQ(FieldTierAmount, v))
+}
+
 // ChainEQ applies the EQ predicate on the "chain" field.
 func ChainEQ(v string) predicate.AssetConfig {
 	return predicate.AssetConfig(sql.FieldEQ(FieldChain, v))
@@ -461,6 +471,156 @@ func ReorgWindowLT(v int) predicate.AssetConfig {
 // ReorgWindowLTE applies the LTE predicate on the "reorg_window" field.
 func ReorgWindowLTE(v int) predicate.AssetConfig {
 	return predicate.AssetConfig(sql.FieldLTE(FieldReorgWindow, v))
+}
+
+// ExposureCapEQ applies the EQ predicate on the "exposure_cap" field.
+func ExposureCapEQ(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEQ(FieldExposureCap, v))
+}
+
+// ExposureCapNEQ applies the NEQ predicate on the "exposure_cap" field.
+func ExposureCapNEQ(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNEQ(FieldExposureCap, v))
+}
+
+// ExposureCapIn applies the In predicate on the "exposure_cap" field.
+func ExposureCapIn(vs ...string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldIn(FieldExposureCap, vs...))
+}
+
+// ExposureCapNotIn applies the NotIn predicate on the "exposure_cap" field.
+func ExposureCapNotIn(vs ...string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNotIn(FieldExposureCap, vs...))
+}
+
+// ExposureCapGT applies the GT predicate on the "exposure_cap" field.
+func ExposureCapGT(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldGT(FieldExposureCap, v))
+}
+
+// ExposureCapGTE applies the GTE predicate on the "exposure_cap" field.
+func ExposureCapGTE(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldGTE(FieldExposureCap, v))
+}
+
+// ExposureCapLT applies the LT predicate on the "exposure_cap" field.
+func ExposureCapLT(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldLT(FieldExposureCap, v))
+}
+
+// ExposureCapLTE applies the LTE predicate on the "exposure_cap" field.
+func ExposureCapLTE(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldLTE(FieldExposureCap, v))
+}
+
+// ExposureCapContains applies the Contains predicate on the "exposure_cap" field.
+func ExposureCapContains(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldContains(FieldExposureCap, v))
+}
+
+// ExposureCapHasPrefix applies the HasPrefix predicate on the "exposure_cap" field.
+func ExposureCapHasPrefix(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldHasPrefix(FieldExposureCap, v))
+}
+
+// ExposureCapHasSuffix applies the HasSuffix predicate on the "exposure_cap" field.
+func ExposureCapHasSuffix(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldHasSuffix(FieldExposureCap, v))
+}
+
+// ExposureCapIsNil applies the IsNil predicate on the "exposure_cap" field.
+func ExposureCapIsNil() predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldIsNull(FieldExposureCap))
+}
+
+// ExposureCapNotNil applies the NotNil predicate on the "exposure_cap" field.
+func ExposureCapNotNil() predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNotNull(FieldExposureCap))
+}
+
+// ExposureCapEqualFold applies the EqualFold predicate on the "exposure_cap" field.
+func ExposureCapEqualFold(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEqualFold(FieldExposureCap, v))
+}
+
+// ExposureCapContainsFold applies the ContainsFold predicate on the "exposure_cap" field.
+func ExposureCapContainsFold(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldContainsFold(FieldExposureCap, v))
+}
+
+// TierAmountEQ applies the EQ predicate on the "tier_amount" field.
+func TierAmountEQ(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEQ(FieldTierAmount, v))
+}
+
+// TierAmountNEQ applies the NEQ predicate on the "tier_amount" field.
+func TierAmountNEQ(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNEQ(FieldTierAmount, v))
+}
+
+// TierAmountIn applies the In predicate on the "tier_amount" field.
+func TierAmountIn(vs ...string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldIn(FieldTierAmount, vs...))
+}
+
+// TierAmountNotIn applies the NotIn predicate on the "tier_amount" field.
+func TierAmountNotIn(vs ...string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNotIn(FieldTierAmount, vs...))
+}
+
+// TierAmountGT applies the GT predicate on the "tier_amount" field.
+func TierAmountGT(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldGT(FieldTierAmount, v))
+}
+
+// TierAmountGTE applies the GTE predicate on the "tier_amount" field.
+func TierAmountGTE(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldGTE(FieldTierAmount, v))
+}
+
+// TierAmountLT applies the LT predicate on the "tier_amount" field.
+func TierAmountLT(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldLT(FieldTierAmount, v))
+}
+
+// TierAmountLTE applies the LTE predicate on the "tier_amount" field.
+func TierAmountLTE(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldLTE(FieldTierAmount, v))
+}
+
+// TierAmountContains applies the Contains predicate on the "tier_amount" field.
+func TierAmountContains(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldContains(FieldTierAmount, v))
+}
+
+// TierAmountHasPrefix applies the HasPrefix predicate on the "tier_amount" field.
+func TierAmountHasPrefix(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldHasPrefix(FieldTierAmount, v))
+}
+
+// TierAmountHasSuffix applies the HasSuffix predicate on the "tier_amount" field.
+func TierAmountHasSuffix(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldHasSuffix(FieldTierAmount, v))
+}
+
+// TierAmountIsNil applies the IsNil predicate on the "tier_amount" field.
+func TierAmountIsNil() predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldIsNull(FieldTierAmount))
+}
+
+// TierAmountNotNil applies the NotNil predicate on the "tier_amount" field.
+func TierAmountNotNil() predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldNotNull(FieldTierAmount))
+}
+
+// TierAmountEqualFold applies the EqualFold predicate on the "tier_amount" field.
+func TierAmountEqualFold(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldEqualFold(FieldTierAmount, v))
+}
+
+// TierAmountContainsFold applies the ContainsFold predicate on the "tier_amount" field.
+func TierAmountContainsFold(v string) predicate.AssetConfig {
+	return predicate.AssetConfig(sql.FieldContainsFold(FieldTierAmount, v))
 }
 
 // And groups predicates with the AND operator between them.

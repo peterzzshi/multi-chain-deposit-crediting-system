@@ -35,6 +35,7 @@ func OpenDB(t *testing.T) *ent.Client {
 			client.SourceEvent.Delete().Exec,
 			client.DepositAddress.Delete().Exec,
 			client.AssetConfig.Delete().Exec,
+			client.ExposureState.Delete().Exec,
 			client.CanonicalBlock.Delete().Exec,
 			client.ChainCursor.Delete().Exec,
 		} {

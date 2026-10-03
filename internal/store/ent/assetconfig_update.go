@@ -167,6 +167,46 @@ func (_u *AssetConfigUpdate) AddReorgWindow(v int) *AssetConfigUpdate {
 	return _u
 }
 
+// SetExposureCap sets the "exposure_cap" field.
+func (_u *AssetConfigUpdate) SetExposureCap(v string) *AssetConfigUpdate {
+	_u.mutation.SetExposureCap(v)
+	return _u
+}
+
+// SetNillableExposureCap sets the "exposure_cap" field if the given value is not nil.
+func (_u *AssetConfigUpdate) SetNillableExposureCap(v *string) *AssetConfigUpdate {
+	if v != nil {
+		_u.SetExposureCap(*v)
+	}
+	return _u
+}
+
+// ClearExposureCap clears the value of the "exposure_cap" field.
+func (_u *AssetConfigUpdate) ClearExposureCap() *AssetConfigUpdate {
+	_u.mutation.ClearExposureCap()
+	return _u
+}
+
+// SetTierAmount sets the "tier_amount" field.
+func (_u *AssetConfigUpdate) SetTierAmount(v string) *AssetConfigUpdate {
+	_u.mutation.SetTierAmount(v)
+	return _u
+}
+
+// SetNillableTierAmount sets the "tier_amount" field if the given value is not nil.
+func (_u *AssetConfigUpdate) SetNillableTierAmount(v *string) *AssetConfigUpdate {
+	if v != nil {
+		_u.SetTierAmount(*v)
+	}
+	return _u
+}
+
+// ClearTierAmount clears the value of the "tier_amount" field.
+func (_u *AssetConfigUpdate) ClearTierAmount() *AssetConfigUpdate {
+	_u.mutation.ClearTierAmount()
+	return _u
+}
+
 // Mutation returns the AssetConfigMutation object of the builder.
 func (_u *AssetConfigUpdate) Mutation() *AssetConfigMutation {
 	return _u.mutation
@@ -286,6 +326,18 @@ func (_u *AssetConfigUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedReorgWindow(); ok {
 		_spec.AddField(assetconfig.FieldReorgWindow, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposureCap(); ok {
+		_spec.SetField(assetconfig.FieldExposureCap, field.TypeString, value)
+	}
+	if _u.mutation.ExposureCapCleared() {
+		_spec.ClearField(assetconfig.FieldExposureCap, field.TypeString)
+	}
+	if value, ok := _u.mutation.TierAmount(); ok {
+		_spec.SetField(assetconfig.FieldTierAmount, field.TypeString, value)
+	}
+	if _u.mutation.TierAmountCleared() {
+		_spec.ClearField(assetconfig.FieldTierAmount, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -447,6 +499,46 @@ func (_u *AssetConfigUpdateOne) AddReorgWindow(v int) *AssetConfigUpdateOne {
 	return _u
 }
 
+// SetExposureCap sets the "exposure_cap" field.
+func (_u *AssetConfigUpdateOne) SetExposureCap(v string) *AssetConfigUpdateOne {
+	_u.mutation.SetExposureCap(v)
+	return _u
+}
+
+// SetNillableExposureCap sets the "exposure_cap" field if the given value is not nil.
+func (_u *AssetConfigUpdateOne) SetNillableExposureCap(v *string) *AssetConfigUpdateOne {
+	if v != nil {
+		_u.SetExposureCap(*v)
+	}
+	return _u
+}
+
+// ClearExposureCap clears the value of the "exposure_cap" field.
+func (_u *AssetConfigUpdateOne) ClearExposureCap() *AssetConfigUpdateOne {
+	_u.mutation.ClearExposureCap()
+	return _u
+}
+
+// SetTierAmount sets the "tier_amount" field.
+func (_u *AssetConfigUpdateOne) SetTierAmount(v string) *AssetConfigUpdateOne {
+	_u.mutation.SetTierAmount(v)
+	return _u
+}
+
+// SetNillableTierAmount sets the "tier_amount" field if the given value is not nil.
+func (_u *AssetConfigUpdateOne) SetNillableTierAmount(v *string) *AssetConfigUpdateOne {
+	if v != nil {
+		_u.SetTierAmount(*v)
+	}
+	return _u
+}
+
+// ClearTierAmount clears the value of the "tier_amount" field.
+func (_u *AssetConfigUpdateOne) ClearTierAmount() *AssetConfigUpdateOne {
+	_u.mutation.ClearTierAmount()
+	return _u
+}
+
 // Mutation returns the AssetConfigMutation object of the builder.
 func (_u *AssetConfigUpdateOne) Mutation() *AssetConfigMutation {
 	return _u.mutation
@@ -596,6 +688,18 @@ func (_u *AssetConfigUpdateOne) sqlSave(ctx context.Context) (_node *AssetConfig
 	}
 	if value, ok := _u.mutation.AddedReorgWindow(); ok {
 		_spec.AddField(assetconfig.FieldReorgWindow, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposureCap(); ok {
+		_spec.SetField(assetconfig.FieldExposureCap, field.TypeString, value)
+	}
+	if _u.mutation.ExposureCapCleared() {
+		_spec.ClearField(assetconfig.FieldExposureCap, field.TypeString)
+	}
+	if value, ok := _u.mutation.TierAmount(); ok {
+		_spec.SetField(assetconfig.FieldTierAmount, field.TypeString, value)
+	}
+	if _u.mutation.TierAmountCleared() {
+		_spec.ClearField(assetconfig.FieldTierAmount, field.TypeString)
 	}
 	_node = &AssetConfig{config: _u.config}
 	_spec.Assign = _node.assignValues

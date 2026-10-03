@@ -114,6 +114,11 @@ func SourceEvent(v string) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldSourceEvent, v))
 }
 
+// Held applies equality check predicate on the "held" field. It's identical to HeldEQ.
+func Held(v bool) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldHeld, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldCreatedAt, v))
@@ -917,6 +922,16 @@ func SourceEventEqualFold(v string) predicate.Deposit {
 // SourceEventContainsFold applies the ContainsFold predicate on the "source_event" field.
 func SourceEventContainsFold(v string) predicate.Deposit {
 	return predicate.Deposit(sql.FieldContainsFold(FieldSourceEvent, v))
+}
+
+// HeldEQ applies the EQ predicate on the "held" field.
+func HeldEQ(v bool) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldHeld, v))
+}
+
+// HeldNEQ applies the NEQ predicate on the "held" field.
+func HeldNEQ(v bool) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNEQ(FieldHeld, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

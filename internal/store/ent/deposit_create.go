@@ -160,6 +160,20 @@ func (_c *DepositCreate) SetNillableSourceEvent(v *string) *DepositCreate {
 	return _c
 }
 
+// SetHeld sets the "held" field.
+func (_c *DepositCreate) SetHeld(v bool) *DepositCreate {
+	_c.mutation.SetHeld(v)
+	return _c
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_c *DepositCreate) SetNillableHeld(v *bool) *DepositCreate {
+	if v != nil {
+		_c.SetHeld(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *DepositCreate) SetCreatedAt(v time.Time) *DepositCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -230,6 +244,10 @@ func (_c *DepositCreate) defaults() {
 	if _, ok := _c.mutation.CreditCycle(); !ok {
 		v := deposit.DefaultCreditCycle
 		_c.mutation.SetCreditCycle(v)
+	}
+	if _, ok := _c.mutation.Held(); !ok {
+		v := deposit.DefaultHeld
+		_c.mutation.SetHeld(v)
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := deposit.DefaultCreatedAt()
@@ -304,6 +322,9 @@ func (_c *DepositCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreditCycle(); !ok {
 		return &ValidationError{Name: "credit_cycle", err: errors.New(`ent: missing required field "Deposit.credit_cycle"`)}
+	}
+	if _, ok := _c.mutation.Held(); !ok {
+		return &ValidationError{Name: "held", err: errors.New(`ent: missing required field "Deposit.held"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Deposit.created_at"`)}
@@ -392,6 +413,10 @@ func (_c *DepositCreate) createSpec() (*Deposit, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SourceEvent(); ok {
 		_spec.SetField(deposit.FieldSourceEvent, field.TypeString, value)
 		_node.SourceEvent = &value
+	}
+	if value, ok := _c.mutation.Held(); ok {
+		_spec.SetField(deposit.FieldHeld, field.TypeBool, value)
+		_node.Held = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(deposit.FieldCreatedAt, field.TypeTime, value)

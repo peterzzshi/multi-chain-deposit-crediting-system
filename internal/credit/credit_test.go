@@ -17,14 +17,23 @@ type fakeStore struct {
 	deposits map[string]View
 	entries  []ledger.Entry
 	balances map[string]*big.Int
+	held     map[string]*big.Int
 	flagged  map[string]bool
+	holds    map[string]holdRule // chain/asset -> active hold rule
+}
+
+type holdRule struct {
+	active bool
+	tier   *big.Int
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		deposits: map[string]View{},
 		balances: map[string]*big.Int{},
+		held:     map[string]*big.Int{},
 		flagged:  map[string]bool{},
+		holds:    map[string]holdRule{},
 	}
 }
 
@@ -32,6 +41,7 @@ func (f *fakeStore) seed(t *testing.T, transferID string, state deposit.State, a
 	t.Helper()
 	f.deposits[transferID] = View{
 		State:   state,
+		Chain:   "evm",
 		Account: "alice",
 		Asset:   "ETH",
 		Amount:  big.NewInt(amount),
@@ -49,6 +59,10 @@ func (f *fakeStore) InTx(ctx context.Context, fn func(context.Context, Tx) error
 	snapshot.balances = make(map[string]*big.Int, len(f.balances))
 	for k, v := range f.balances {
 		snapshot.balances[k] = new(big.Int).Set(v)
+	}
+	snapshot.held = make(map[string]*big.Int, len(f.held))
+	for k, v := range f.held {
+		snapshot.held[k] = new(big.Int).Set(v)
 	}
 	snapshot.flagged = make(map[string]bool, len(f.flagged))
 	for k, v := range f.flagged {
@@ -97,19 +111,49 @@ func (t *fakeTx) HasEntry(_ context.Context, ref string) (bool, error) {
 	return false, nil
 }
 
-func (t *fakeTx) BalanceForUpdate(_ context.Context, account, asset string) (*big.Int, bool, error) {
+func (t *fakeTx) BalanceForUpdate(_ context.Context, account, asset string) (Balance, error) {
 	k := account + "/" + asset
-	b, ok := t.f.balances[k]
-	if !ok {
-		return new(big.Int), false, nil
+	b := t.f.balances[k]
+	if b == nil {
+		b = new(big.Int)
 	}
-	return new(big.Int).Set(b), t.f.flagged[k], nil
+	h := t.f.held[k]
+	if h == nil {
+		h = new(big.Int)
+	}
+	return Balance{Amount: new(big.Int).Set(b), Held: new(big.Int).Set(h), Flagged: t.f.flagged[k]}, nil
 }
 
 func (t *fakeTx) SetBalance(_ context.Context, account, asset string, balance *big.Int, flagged bool) error {
 	k := account + "/" + asset
 	t.f.balances[k] = new(big.Int).Set(balance)
 	t.f.flagged[k] = flagged
+	return nil
+}
+
+func (t *fakeTx) HoldsActive(_ context.Context, chain, asset string) (bool, *big.Int, error) {
+	rule := t.f.holds[chain+"/"+asset]
+	return rule.active, rule.tier, nil
+}
+
+func (t *fakeTx) SetHeld(_ context.Context, transferID, account, asset string, amount *big.Int) error {
+	return t.adjustHeld(transferID, account, asset, amount, true)
+}
+
+func (t *fakeTx) ClearHeld(_ context.Context, transferID, account, asset string, amount *big.Int) error {
+	return t.adjustHeld(transferID, account, asset, new(big.Int).Neg(amount), false)
+}
+
+func (t *fakeTx) adjustHeld(transferID, account, asset string, delta *big.Int, held bool) error {
+	v := t.f.deposits[transferID]
+	v.Held = held
+	t.f.deposits[transferID] = v
+	k := account + "/" + asset
+	current := t.f.held[k]
+	if current == nil {
+		current = new(big.Int)
+	}
+	t.f.held[k] = new(big.Int).Add(current, delta)
 	return nil
 }
 
@@ -301,6 +345,79 @@ func TestDebitInsufficientFundsRollsBack(t *testing.T) {
 	}
 	if got, want := len(store.entries), 1; got != want {
 		t.Errorf("entries after failed debit = %d; want %d (rolled back)", got, want)
+	}
+}
+
+// risk-policy §4: an active exposure cap never blocks the credit from
+// posting — it only holds spendability.
+func TestCreditUnderActiveCapPostsButIsHeld(t *testing.T) {
+	store := newFakeStore()
+	store.holds["evm/ETH"] = holdRule{active: true}
+	store.seed(t, testTransfer, deposit.StatePending, 100)
+	engine := NewEngine(store)
+	ctx := context.Background()
+
+	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
+	}
+	if got, want := store.balances["alice/ETH"].String(), "100"; got != want {
+		t.Errorf("balance = %s; want %s (credit posts under cap)", got, want)
+	}
+	if got, want := store.held["alice/ETH"].String(), "100"; got != want {
+		t.Errorf("held = %s; want %s", got, want)
+	}
+	if !store.deposits[testTransfer].Held {
+		t.Error("deposit.Held = false; want true")
+	}
+	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(1), "withdrawal:1"); !errors.Is(err, errs.ErrInsufficientFunds) {
+		t.Errorf("Debit() of held funds error = %v; want errs.ErrInsufficientFunds", err)
+	}
+}
+
+func TestCreditBelowTierStaysSpendable(t *testing.T) {
+	store := newFakeStore()
+	store.holds["evm/ETH"] = holdRule{active: true, tier: big.NewInt(50)}
+	store.seed(t, testTransfer, deposit.StatePending, 30)
+	engine := NewEngine(store)
+	ctx := context.Background()
+
+	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
+	}
+	if store.deposits[testTransfer].Held {
+		t.Error("deposit.Held = true for below-tier credit; want false")
+	}
+	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(30), "withdrawal:1"); err != nil {
+		t.Errorf("Debit() of below-tier credit unexpected error: %v", err)
+	}
+}
+
+// A held deposit that is reversed must release its hold, or the held
+// projection leaks and blocks spendable funds forever.
+func TestReversalOfHeldDepositClearsHold(t *testing.T) {
+	store := newFakeStore()
+	store.holds["evm/ETH"] = holdRule{active: true}
+	store.seed(t, testTransfer, deposit.StatePending, 100)
+	engine := NewEngine(store)
+	ctx := context.Background()
+
+	for _, ev := range []deposit.Event{
+		deposit.EventDepthReached,
+		deposit.EventReorgedOut,
+		deposit.EventWindowExpiredCredited,
+	} {
+		if err := engine.Apply(ctx, testTransfer, ev); err != nil {
+			t.Fatalf("Apply(%s) unexpected error: %v", ev, err)
+		}
+	}
+	if got, want := store.balances["alice/ETH"].String(), "0"; got != want {
+		t.Errorf("balance = %s; want %s", got, want)
+	}
+	if got, want := store.held["alice/ETH"].String(), "0"; got != want {
+		t.Errorf("held = %s; want %s (reversal releases the hold)", got, want)
+	}
+	if store.deposits[testTransfer].Held {
+		t.Error("deposit.Held = true after reversal; want false")
 	}
 }
 

@@ -24,6 +24,8 @@ type Tx struct {
 	Deposit *DepositClient
 	// DepositAddress is the client for interacting with the DepositAddress builders.
 	DepositAddress *DepositAddressClient
+	// ExposureState is the client for interacting with the ExposureState builders.
+	ExposureState *ExposureStateClient
 	// LedgerEntry is the client for interacting with the LedgerEntry builders.
 	LedgerEntry *LedgerEntryClient
 	// SourceEvent is the client for interacting with the SourceEvent builders.
@@ -165,6 +167,7 @@ func (tx *Tx) init() {
 	tx.ChainCursor = NewChainCursorClient(tx.config)
 	tx.Deposit = NewDepositClient(tx.config)
 	tx.DepositAddress = NewDepositAddressClient(tx.config)
+	tx.ExposureState = NewExposureStateClient(tx.config)
 	tx.LedgerEntry = NewLedgerEntryClient(tx.config)
 	tx.SourceEvent = NewSourceEventClient(tx.config)
 }

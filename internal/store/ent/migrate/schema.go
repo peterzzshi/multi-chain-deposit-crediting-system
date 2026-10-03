@@ -14,6 +14,7 @@ var (
 		{Name: "account", Type: field.TypeString},
 		{Name: "asset", Type: field.TypeString},
 		{Name: "balance", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
+		{Name: "held", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
 		{Name: "flagged", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 0},
 	}
@@ -41,6 +42,8 @@ var (
 		{Name: "n_credit", Type: field.TypeInt},
 		{Name: "n_finalize", Type: field.TypeInt},
 		{Name: "reorg_window", Type: field.TypeInt},
+		{Name: "exposure_cap", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
+		{Name: "tier_amount", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
 	}
 	// AssetConfigsTable holds the schema information for the "asset_configs" table.
 	AssetConfigsTable = &schema.Table{
@@ -105,6 +108,7 @@ var (
 		{Name: "reorged_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "tx_hash", Type: field.TypeString, Nullable: true},
 		{Name: "source_event", Type: field.TypeString, Nullable: true},
+		{Name: "held", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -145,6 +149,28 @@ var (
 				Name:    "depositaddress_chain_address",
 				Unique:  true,
 				Columns: []*schema.Column{DepositAddressesColumns[2], DepositAddressesColumns[3]},
+			},
+		},
+	}
+	// ExposureStatesColumns holds the columns for the "exposure_states" table.
+	ExposureStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "chain", Type: field.TypeString},
+		{Name: "asset", Type: field.TypeString},
+		{Name: "holds_active", Type: field.TypeBool, Default: false},
+		{Name: "exposure", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ExposureStatesTable holds the schema information for the "exposure_states" table.
+	ExposureStatesTable = &schema.Table{
+		Name:       "exposure_states",
+		Columns:    ExposureStatesColumns,
+		PrimaryKey: []*schema.Column{ExposureStatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "exposurestate_chain_asset",
+				Unique:  true,
+				Columns: []*schema.Column{ExposureStatesColumns[1], ExposureStatesColumns[2]},
 			},
 		},
 	}
@@ -200,6 +226,7 @@ var (
 		ChainCursorsTable,
 		DepositsTable,
 		DepositAddressesTable,
+		ExposureStatesTable,
 		LedgerEntriesTable,
 		SourceEventsTable,
 	}

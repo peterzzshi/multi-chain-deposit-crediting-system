@@ -261,6 +261,20 @@ func (_u *DepositUpdate) ClearSourceEvent() *DepositUpdate {
 	return _u
 }
 
+// SetHeld sets the "held" field.
+func (_u *DepositUpdate) SetHeld(v bool) *DepositUpdate {
+	_u.mutation.SetHeld(v)
+	return _u
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_u *DepositUpdate) SetNillableHeld(v *bool) *DepositUpdate {
+	if v != nil {
+		_u.SetHeld(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdate) SetUpdatedAt(v time.Time) *DepositUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -417,6 +431,9 @@ func (_u *DepositUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SourceEventCleared() {
 		_spec.ClearField(deposit.FieldSourceEvent, field.TypeString)
+	}
+	if value, ok := _u.mutation.Held(); ok {
+		_spec.SetField(deposit.FieldHeld, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)
@@ -674,6 +691,20 @@ func (_u *DepositUpdateOne) ClearSourceEvent() *DepositUpdateOne {
 	return _u
 }
 
+// SetHeld sets the "held" field.
+func (_u *DepositUpdateOne) SetHeld(v bool) *DepositUpdateOne {
+	_u.mutation.SetHeld(v)
+	return _u
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_u *DepositUpdateOne) SetNillableHeld(v *bool) *DepositUpdateOne {
+	if v != nil {
+		_u.SetHeld(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdateOne) SetUpdatedAt(v time.Time) *DepositUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -860,6 +891,9 @@ func (_u *DepositUpdateOne) sqlSave(ctx context.Context) (_node *Deposit, err er
 	}
 	if _u.mutation.SourceEventCleared() {
 		_spec.ClearField(deposit.FieldSourceEvent, field.TypeString)
+	}
+	if value, ok := _u.mutation.Held(); ok {
+		_spec.SetField(deposit.FieldHeld, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)

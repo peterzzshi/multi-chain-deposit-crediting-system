@@ -42,6 +42,8 @@ const (
 	FieldTxHash = "tx_hash"
 	// FieldSourceEvent holds the string denoting the source_event field in the database.
 	FieldSourceEvent = "source_event"
+	// FieldHeld holds the string denoting the held field in the database.
+	FieldHeld = "held"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -67,6 +69,7 @@ var Columns = []string{
 	FieldReorgedHeight,
 	FieldTxHash,
 	FieldSourceEvent,
+	FieldHeld,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -94,6 +97,8 @@ var (
 	AddressValidator func(string) error
 	// DefaultCreditCycle holds the default value on creation for the "credit_cycle" field.
 	DefaultCreditCycle int
+	// DefaultHeld holds the default value on creation for the "held" field.
+	DefaultHeld bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -232,6 +237,11 @@ func ByTxHash(opts ...sql.OrderTermOption) OrderOption {
 // BySourceEvent orders the results by the source_event field.
 func BySourceEvent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSourceEvent, opts...).ToFunc()
+}
+
+// ByHeld orders the results by the held field.
+func ByHeld(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHeld, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

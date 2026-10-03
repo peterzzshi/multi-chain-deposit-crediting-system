@@ -51,37 +51,29 @@ func (_m *MockTx) EXPECT() *MockTx_Expecter {
 }
 
 // BalanceForUpdate provides a mock function for the type MockTx
-func (_mock *MockTx) BalanceForUpdate(ctx context.Context, account string, asset string) (*big.Int, bool, error) {
+func (_mock *MockTx) BalanceForUpdate(ctx context.Context, account string, asset string) (credit.Balance, error) {
 	ret := _mock.Called(ctx, account, asset)
 
 	if len(ret) == 0 {
 		panic("no return value specified for BalanceForUpdate")
 	}
 
-	var r0 *big.Int
-	var r1 bool
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*big.Int, bool, error)); ok {
+	var r0 credit.Balance
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (credit.Balance, error)); ok {
 		return returnFunc(ctx, account, asset)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *big.Int); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) credit.Balance); ok {
 		r0 = returnFunc(ctx, account, asset)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*big.Int)
-		}
+		r0 = ret.Get(0).(credit.Balance)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) bool); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
 		r1 = returnFunc(ctx, account, asset)
 	} else {
-		r1 = ret.Get(1).(bool)
+		r1 = ret.Error(1)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
-		r2 = returnFunc(ctx, account, asset)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
+	return r0, r1
 }
 
 // MockTx_BalanceForUpdate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BalanceForUpdate'
@@ -120,12 +112,87 @@ func (_c *MockTx_BalanceForUpdate_Call) Run(run func(ctx context.Context, accoun
 	return _c
 }
 
-func (_c *MockTx_BalanceForUpdate_Call) Return(balance *big.Int, flagged bool, err error) *MockTx_BalanceForUpdate_Call {
-	_c.Call.Return(balance, flagged, err)
+func (_c *MockTx_BalanceForUpdate_Call) Return(balance credit.Balance, err error) *MockTx_BalanceForUpdate_Call {
+	_c.Call.Return(balance, err)
 	return _c
 }
 
-func (_c *MockTx_BalanceForUpdate_Call) RunAndReturn(run func(ctx context.Context, account string, asset string) (*big.Int, bool, error)) *MockTx_BalanceForUpdate_Call {
+func (_c *MockTx_BalanceForUpdate_Call) RunAndReturn(run func(ctx context.Context, account string, asset string) (credit.Balance, error)) *MockTx_BalanceForUpdate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ClearHeld provides a mock function for the type MockTx
+func (_mock *MockTx) ClearHeld(ctx context.Context, transferID string, account string, asset string, amount *big.Int) error {
+	ret := _mock.Called(ctx, transferID, account, asset, amount)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearHeld")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, *big.Int) error); ok {
+		r0 = returnFunc(ctx, transferID, account, asset, amount)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockTx_ClearHeld_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearHeld'
+type MockTx_ClearHeld_Call struct {
+	*mock.Call
+}
+
+// ClearHeld is a helper method to define mock.On call
+//   - ctx context.Context
+//   - transferID string
+//   - account string
+//   - asset string
+//   - amount *big.Int
+func (_e *MockTx_Expecter) ClearHeld(ctx any, transferID any, account any, asset any, amount any) *MockTx_ClearHeld_Call {
+	return &MockTx_ClearHeld_Call{Call: _e.mock.On("ClearHeld", ctx, transferID, account, asset, amount)}
+}
+
+func (_c *MockTx_ClearHeld_Call) Run(run func(ctx context.Context, transferID string, account string, asset string, amount *big.Int)) *MockTx_ClearHeld_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 *big.Int
+		if args[4] != nil {
+			arg4 = args[4].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_ClearHeld_Call) Return(err error) *MockTx_ClearHeld_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockTx_ClearHeld_Call) RunAndReturn(run func(ctx context.Context, transferID string, account string, asset string, amount *big.Int) error) *MockTx_ClearHeld_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -258,6 +325,86 @@ func (_c *MockTx_HasEntry_Call) Return(b bool, err error) *MockTx_HasEntry_Call 
 }
 
 func (_c *MockTx_HasEntry_Call) RunAndReturn(run func(ctx context.Context, ref string) (bool, error)) *MockTx_HasEntry_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// HoldsActive provides a mock function for the type MockTx
+func (_mock *MockTx) HoldsActive(ctx context.Context, chain string, asset string) (bool, *big.Int, error) {
+	ret := _mock.Called(ctx, chain, asset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for HoldsActive")
+	}
+
+	var r0 bool
+	var r1 *big.Int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (bool, *big.Int, error)); ok {
+		return returnFunc(ctx, chain, asset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = returnFunc(ctx, chain, asset)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) *big.Int); ok {
+		r1 = returnFunc(ctx, chain, asset)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*big.Int)
+		}
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
+		r2 = returnFunc(ctx, chain, asset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockTx_HoldsActive_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HoldsActive'
+type MockTx_HoldsActive_Call struct {
+	*mock.Call
+}
+
+// HoldsActive is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chain string
+//   - asset string
+func (_e *MockTx_Expecter) HoldsActive(ctx any, chain any, asset any) *MockTx_HoldsActive_Call {
+	return &MockTx_HoldsActive_Call{Call: _e.mock.On("HoldsActive", ctx, chain, asset)}
+}
+
+func (_c *MockTx_HoldsActive_Call) Run(run func(ctx context.Context, chain string, asset string)) *MockTx_HoldsActive_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_HoldsActive_Call) Return(active bool, tier *big.Int, err error) *MockTx_HoldsActive_Call {
+	_c.Call.Return(active, tier, err)
+	return _c
+}
+
+func (_c *MockTx_HoldsActive_Call) RunAndReturn(run func(ctx context.Context, chain string, asset string) (bool, *big.Int, error)) *MockTx_HoldsActive_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -453,6 +600,81 @@ func (_c *MockTx_SetDepositState_Call) Return(err error) *MockTx_SetDepositState
 }
 
 func (_c *MockTx_SetDepositState_Call) RunAndReturn(run func(ctx context.Context, transferID string, state deposit.State) error) *MockTx_SetDepositState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetHeld provides a mock function for the type MockTx
+func (_mock *MockTx) SetHeld(ctx context.Context, transferID string, account string, asset string, amount *big.Int) error {
+	ret := _mock.Called(ctx, transferID, account, asset, amount)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetHeld")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, *big.Int) error); ok {
+		r0 = returnFunc(ctx, transferID, account, asset, amount)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockTx_SetHeld_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetHeld'
+type MockTx_SetHeld_Call struct {
+	*mock.Call
+}
+
+// SetHeld is a helper method to define mock.On call
+//   - ctx context.Context
+//   - transferID string
+//   - account string
+//   - asset string
+//   - amount *big.Int
+func (_e *MockTx_Expecter) SetHeld(ctx any, transferID any, account any, asset any, amount any) *MockTx_SetHeld_Call {
+	return &MockTx_SetHeld_Call{Call: _e.mock.On("SetHeld", ctx, transferID, account, asset, amount)}
+}
+
+func (_c *MockTx_SetHeld_Call) Run(run func(ctx context.Context, transferID string, account string, asset string, amount *big.Int)) *MockTx_SetHeld_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 *big.Int
+		if args[4] != nil {
+			arg4 = args[4].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_SetHeld_Call) Return(err error) *MockTx_SetHeld_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockTx_SetHeld_Call) RunAndReturn(run func(ctx context.Context, transferID string, account string, asset string, amount *big.Int) error) *MockTx_SetHeld_Call {
 	_c.Call.Return(run)
 	return _c
 }

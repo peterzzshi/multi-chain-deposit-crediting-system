@@ -75,6 +75,34 @@ func (_c *AssetConfigCreate) SetReorgWindow(v int) *AssetConfigCreate {
 	return _c
 }
 
+// SetExposureCap sets the "exposure_cap" field.
+func (_c *AssetConfigCreate) SetExposureCap(v string) *AssetConfigCreate {
+	_c.mutation.SetExposureCap(v)
+	return _c
+}
+
+// SetNillableExposureCap sets the "exposure_cap" field if the given value is not nil.
+func (_c *AssetConfigCreate) SetNillableExposureCap(v *string) *AssetConfigCreate {
+	if v != nil {
+		_c.SetExposureCap(*v)
+	}
+	return _c
+}
+
+// SetTierAmount sets the "tier_amount" field.
+func (_c *AssetConfigCreate) SetTierAmount(v string) *AssetConfigCreate {
+	_c.mutation.SetTierAmount(v)
+	return _c
+}
+
+// SetNillableTierAmount sets the "tier_amount" field if the given value is not nil.
+func (_c *AssetConfigCreate) SetNillableTierAmount(v *string) *AssetConfigCreate {
+	if v != nil {
+		_c.SetTierAmount(*v)
+	}
+	return _c
+}
+
 // Mutation returns the AssetConfigMutation object of the builder.
 func (_c *AssetConfigCreate) Mutation() *AssetConfigMutation {
 	return _c.mutation
@@ -234,6 +262,14 @@ func (_c *AssetConfigCreate) createSpec() (*AssetConfig, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ReorgWindow(); ok {
 		_spec.SetField(assetconfig.FieldReorgWindow, field.TypeInt, value)
 		_node.ReorgWindow = value
+	}
+	if value, ok := _c.mutation.ExposureCap(); ok {
+		_spec.SetField(assetconfig.FieldExposureCap, field.TypeString, value)
+		_node.ExposureCap = &value
+	}
+	if value, ok := _c.mutation.TierAmount(); ok {
+		_spec.SetField(assetconfig.FieldTierAmount, field.TypeString, value)
+		_node.TierAmount = &value
 	}
 	return _node, _spec
 }

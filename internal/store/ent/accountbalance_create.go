@@ -45,6 +45,20 @@ func (_c *AccountBalanceCreate) SetNillableBalance(v *string) *AccountBalanceCre
 	return _c
 }
 
+// SetHeld sets the "held" field.
+func (_c *AccountBalanceCreate) SetHeld(v string) *AccountBalanceCreate {
+	_c.mutation.SetHeld(v)
+	return _c
+}
+
+// SetNillableHeld sets the "held" field if the given value is not nil.
+func (_c *AccountBalanceCreate) SetNillableHeld(v *string) *AccountBalanceCreate {
+	if v != nil {
+		_c.SetHeld(*v)
+	}
+	return _c
+}
+
 // SetFlagged sets the "flagged" field.
 func (_c *AccountBalanceCreate) SetFlagged(v bool) *AccountBalanceCreate {
 	_c.mutation.SetFlagged(v)
@@ -112,6 +126,10 @@ func (_c *AccountBalanceCreate) defaults() {
 		v := accountbalance.DefaultBalance
 		_c.mutation.SetBalance(v)
 	}
+	if _, ok := _c.mutation.Held(); !ok {
+		v := accountbalance.DefaultHeld
+		_c.mutation.SetHeld(v)
+	}
 	if _, ok := _c.mutation.Flagged(); !ok {
 		v := accountbalance.DefaultFlagged
 		_c.mutation.SetFlagged(v)
@@ -142,6 +160,9 @@ func (_c *AccountBalanceCreate) check() error {
 	}
 	if _, ok := _c.mutation.Balance(); !ok {
 		return &ValidationError{Name: "balance", err: errors.New(`ent: missing required field "AccountBalance.balance"`)}
+	}
+	if _, ok := _c.mutation.Held(); !ok {
+		return &ValidationError{Name: "held", err: errors.New(`ent: missing required field "AccountBalance.held"`)}
 	}
 	if _, ok := _c.mutation.Flagged(); !ok {
 		return &ValidationError{Name: "flagged", err: errors.New(`ent: missing required field "AccountBalance.flagged"`)}
@@ -186,6 +207,10 @@ func (_c *AccountBalanceCreate) createSpec() (*AccountBalance, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Balance(); ok {
 		_spec.SetField(accountbalance.FieldBalance, field.TypeString, value)
 		_node.Balance = value
+	}
+	if value, ok := _c.mutation.Held(); ok {
+		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
+		_node.Held = value
 	}
 	if value, ok := _c.mutation.Flagged(); ok {
 		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)

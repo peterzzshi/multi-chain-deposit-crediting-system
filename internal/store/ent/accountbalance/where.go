@@ -68,6 +68,11 @@ func Balance(v string) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldEQ(FieldBalance, v))
 }
 
+// Held applies equality check predicate on the "held" field. It's identical to HeldEQ.
+func Held(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldEQ(FieldHeld, v))
+}
+
 // Flagged applies equality check predicate on the "flagged" field. It's identical to FlaggedEQ.
 func Flagged(v bool) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldEQ(FieldFlagged, v))
@@ -271,6 +276,71 @@ func BalanceEqualFold(v string) predicate.AccountBalance {
 // BalanceContainsFold applies the ContainsFold predicate on the "balance" field.
 func BalanceContainsFold(v string) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldContainsFold(FieldBalance, v))
+}
+
+// HeldEQ applies the EQ predicate on the "held" field.
+func HeldEQ(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldEQ(FieldHeld, v))
+}
+
+// HeldNEQ applies the NEQ predicate on the "held" field.
+func HeldNEQ(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldNEQ(FieldHeld, v))
+}
+
+// HeldIn applies the In predicate on the "held" field.
+func HeldIn(vs ...string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldIn(FieldHeld, vs...))
+}
+
+// HeldNotIn applies the NotIn predicate on the "held" field.
+func HeldNotIn(vs ...string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldNotIn(FieldHeld, vs...))
+}
+
+// HeldGT applies the GT predicate on the "held" field.
+func HeldGT(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldGT(FieldHeld, v))
+}
+
+// HeldGTE applies the GTE predicate on the "held" field.
+func HeldGTE(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldGTE(FieldHeld, v))
+}
+
+// HeldLT applies the LT predicate on the "held" field.
+func HeldLT(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldLT(FieldHeld, v))
+}
+
+// HeldLTE applies the LTE predicate on the "held" field.
+func HeldLTE(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldLTE(FieldHeld, v))
+}
+
+// HeldContains applies the Contains predicate on the "held" field.
+func HeldContains(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldContains(FieldHeld, v))
+}
+
+// HeldHasPrefix applies the HasPrefix predicate on the "held" field.
+func HeldHasPrefix(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldHasPrefix(FieldHeld, v))
+}
+
+// HeldHasSuffix applies the HasSuffix predicate on the "held" field.
+func HeldHasSuffix(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldHasSuffix(FieldHeld, v))
+}
+
+// HeldEqualFold applies the EqualFold predicate on the "held" field.
+func HeldEqualFold(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldEqualFold(FieldHeld, v))
+}
+
+// HeldContainsFold applies the ContainsFold predicate on the "held" field.
+func HeldContainsFold(v string) predicate.AccountBalance {
+	return predicate.AccountBalance(sql.FieldContainsFold(FieldHeld, v))
 }
 
 // FlaggedEQ applies the EQ predicate on the "flagged" field.

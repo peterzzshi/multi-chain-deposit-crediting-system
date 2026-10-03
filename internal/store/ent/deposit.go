@@ -45,6 +45,8 @@ type Deposit struct {
 	TxHash *string `json:"tx_hash,omitempty"`
 	// SourceEvent holds the value of the "source_event" field.
 	SourceEvent *string `json:"source_event,omitempty"`
+	// Held holds the value of the "held" field.
+	Held bool `json:"held,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -57,6 +59,8 @@ func (*Deposit) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case deposit.FieldHeld:
+			values[i] = new(sql.NullBool)
 		case deposit.FieldID, deposit.FieldCreditCycle, deposit.FieldBlockHeight, deposit.FieldReorgedHeight:
 			values[i] = new(sql.NullInt64)
 		case deposit.FieldTransferID, deposit.FieldChain, deposit.FieldAsset, deposit.FieldAccount, deposit.FieldAddress, deposit.FieldAmount, deposit.FieldMode, deposit.FieldState, deposit.FieldBlockHash, deposit.FieldTxHash, deposit.FieldSourceEvent:
@@ -173,6 +177,12 @@ func (_m *Deposit) assignValues(columns []string, values []any) error {
 				_m.SourceEvent = new(string)
 				*_m.SourceEvent = value.String
 			}
+		case deposit.FieldHeld:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field held", values[i])
+			} else if value.Valid {
+				_m.Held = value.Bool
+			}
 		case deposit.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -272,6 +282,9 @@ func (_m *Deposit) String() string {
 		builder.WriteString("source_event=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("held=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Held))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

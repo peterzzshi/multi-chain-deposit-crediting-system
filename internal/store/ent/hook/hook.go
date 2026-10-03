@@ -80,6 +80,18 @@ func (f DepositAddressFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DepositAddressMutation", m)
 }
 
+// The ExposureStateFunc type is an adapter to allow the use of ordinary
+// function as ExposureState mutator.
+type ExposureStateFunc func(context.Context, *ent.ExposureStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ExposureStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExposureStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExposureStateMutation", m)
+}
+
 // The LedgerEntryFunc type is an adapter to allow the use of ordinary
 // function as LedgerEntry mutator.
 type LedgerEntryFunc func(context.Context, *ent.LedgerEntryMutation) (ent.Value, error)
