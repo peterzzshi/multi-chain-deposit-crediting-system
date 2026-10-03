@@ -22,8 +22,7 @@ import (
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-
-	_ "github.com/lib/pq"
+	"deposit-crediting/internal/store/storetest"
 )
 
 const (
@@ -45,7 +44,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	f := &fixture{t: t, ctx: context.Background(), client: openTestDB(t), chain: chaintest.NewChain()}
+	f := &fixture{t: t, ctx: context.Background(), client: storetest.OpenDB(t), chain: chaintest.NewChain()}
 	f.engine = credit.NewEngine(store.New(f.client))
 	f.sc = scanner.New(
 		scanner.Config{ChainID: chainID, StartHeight: 1, MaxBatch: 100},
@@ -64,38 +63,6 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("seed address: %v", err)
 	}
 	return f
-}
-
-func openTestDB(t *testing.T) *ent.Client {
-	t.Helper()
-	client, err := ent.Open("postgres", "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable&connect_timeout=2")
-	if err != nil {
-		t.Skipf("postgres unavailable, skipping integration test: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := client.Schema.Create(ctx); err != nil {
-		t.Skipf("postgres unreachable at localhost:5432, skipping integration test: %v", err)
-	}
-	t.Cleanup(func() {
-		for _, del := range []func(context.Context) (int, error){
-			client.LedgerEntry.Delete().Exec,
-			client.AccountBalance.Delete().Exec,
-			client.Deposit.Delete().Exec,
-			client.DepositAddress.Delete().Exec,
-			client.AssetConfig.Delete().Exec,
-			client.CanonicalBlock.Delete().Exec,
-			client.ChainCursor.Delete().Exec,
-		} {
-			if _, err := del(context.Background()); err != nil {
-				t.Errorf("cleanup: %v", err)
-			}
-		}
-		if err := client.Close(); err != nil {
-			t.Errorf("close client: %v", err)
-		}
-	})
-	return client
 }
 
 func nativeTransfer(txHash, to string, amount int64) chain.Transfer {

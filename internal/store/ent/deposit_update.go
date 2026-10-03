@@ -221,6 +221,46 @@ func (_u *DepositUpdate) ClearReorgedHeight() *DepositUpdate {
 	return _u
 }
 
+// SetTxHash sets the "tx_hash" field.
+func (_u *DepositUpdate) SetTxHash(v string) *DepositUpdate {
+	_u.mutation.SetTxHash(v)
+	return _u
+}
+
+// SetNillableTxHash sets the "tx_hash" field if the given value is not nil.
+func (_u *DepositUpdate) SetNillableTxHash(v *string) *DepositUpdate {
+	if v != nil {
+		_u.SetTxHash(*v)
+	}
+	return _u
+}
+
+// ClearTxHash clears the value of the "tx_hash" field.
+func (_u *DepositUpdate) ClearTxHash() *DepositUpdate {
+	_u.mutation.ClearTxHash()
+	return _u
+}
+
+// SetSourceEvent sets the "source_event" field.
+func (_u *DepositUpdate) SetSourceEvent(v string) *DepositUpdate {
+	_u.mutation.SetSourceEvent(v)
+	return _u
+}
+
+// SetNillableSourceEvent sets the "source_event" field if the given value is not nil.
+func (_u *DepositUpdate) SetNillableSourceEvent(v *string) *DepositUpdate {
+	if v != nil {
+		_u.SetSourceEvent(*v)
+	}
+	return _u
+}
+
+// ClearSourceEvent clears the value of the "source_event" field.
+func (_u *DepositUpdate) ClearSourceEvent() *DepositUpdate {
+	_u.mutation.ClearSourceEvent()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdate) SetUpdatedAt(v time.Time) *DepositUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -365,6 +405,18 @@ func (_u *DepositUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ReorgedHeightCleared() {
 		_spec.ClearField(deposit.FieldReorgedHeight, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.TxHash(); ok {
+		_spec.SetField(deposit.FieldTxHash, field.TypeString, value)
+	}
+	if _u.mutation.TxHashCleared() {
+		_spec.ClearField(deposit.FieldTxHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceEvent(); ok {
+		_spec.SetField(deposit.FieldSourceEvent, field.TypeString, value)
+	}
+	if _u.mutation.SourceEventCleared() {
+		_spec.ClearField(deposit.FieldSourceEvent, field.TypeString)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)
@@ -582,6 +634,46 @@ func (_u *DepositUpdateOne) ClearReorgedHeight() *DepositUpdateOne {
 	return _u
 }
 
+// SetTxHash sets the "tx_hash" field.
+func (_u *DepositUpdateOne) SetTxHash(v string) *DepositUpdateOne {
+	_u.mutation.SetTxHash(v)
+	return _u
+}
+
+// SetNillableTxHash sets the "tx_hash" field if the given value is not nil.
+func (_u *DepositUpdateOne) SetNillableTxHash(v *string) *DepositUpdateOne {
+	if v != nil {
+		_u.SetTxHash(*v)
+	}
+	return _u
+}
+
+// ClearTxHash clears the value of the "tx_hash" field.
+func (_u *DepositUpdateOne) ClearTxHash() *DepositUpdateOne {
+	_u.mutation.ClearTxHash()
+	return _u
+}
+
+// SetSourceEvent sets the "source_event" field.
+func (_u *DepositUpdateOne) SetSourceEvent(v string) *DepositUpdateOne {
+	_u.mutation.SetSourceEvent(v)
+	return _u
+}
+
+// SetNillableSourceEvent sets the "source_event" field if the given value is not nil.
+func (_u *DepositUpdateOne) SetNillableSourceEvent(v *string) *DepositUpdateOne {
+	if v != nil {
+		_u.SetSourceEvent(*v)
+	}
+	return _u
+}
+
+// ClearSourceEvent clears the value of the "source_event" field.
+func (_u *DepositUpdateOne) ClearSourceEvent() *DepositUpdateOne {
+	_u.mutation.ClearSourceEvent()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdateOne) SetUpdatedAt(v time.Time) *DepositUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -756,6 +848,18 @@ func (_u *DepositUpdateOne) sqlSave(ctx context.Context) (_node *Deposit, err er
 	}
 	if _u.mutation.ReorgedHeightCleared() {
 		_spec.ClearField(deposit.FieldReorgedHeight, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.TxHash(); ok {
+		_spec.SetField(deposit.FieldTxHash, field.TypeString, value)
+	}
+	if _u.mutation.TxHashCleared() {
+		_spec.ClearField(deposit.FieldTxHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceEvent(); ok {
+		_spec.SetField(deposit.FieldSourceEvent, field.TypeString, value)
+	}
+	if _u.mutation.SourceEventCleared() {
+		_spec.ClearField(deposit.FieldSourceEvent, field.TypeString)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)

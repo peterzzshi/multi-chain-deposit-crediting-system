@@ -11,6 +11,7 @@ import (
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
+	"deposit-crediting/internal/store/ent/sourceevent"
 	"errors"
 	"fmt"
 	"reflect"
@@ -86,6 +87,7 @@ func checkColumn(t, c string) error {
 			deposit.Table:        deposit.ValidColumn,
 			depositaddress.Table: depositaddress.ValidColumn,
 			ledgerentry.Table:    ledgerentry.ValidColumn,
+			sourceevent.Table:    sourceevent.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

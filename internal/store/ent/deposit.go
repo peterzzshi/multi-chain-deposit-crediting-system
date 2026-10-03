@@ -41,6 +41,10 @@ type Deposit struct {
 	BlockHash *string `json:"block_hash,omitempty"`
 	// ReorgedHeight holds the value of the "reorged_height" field.
 	ReorgedHeight *int64 `json:"reorged_height,omitempty"`
+	// TxHash holds the value of the "tx_hash" field.
+	TxHash *string `json:"tx_hash,omitempty"`
+	// SourceEvent holds the value of the "source_event" field.
+	SourceEvent *string `json:"source_event,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -55,7 +59,7 @@ func (*Deposit) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case deposit.FieldID, deposit.FieldCreditCycle, deposit.FieldBlockHeight, deposit.FieldReorgedHeight:
 			values[i] = new(sql.NullInt64)
-		case deposit.FieldTransferID, deposit.FieldChain, deposit.FieldAsset, deposit.FieldAccount, deposit.FieldAddress, deposit.FieldAmount, deposit.FieldMode, deposit.FieldState, deposit.FieldBlockHash:
+		case deposit.FieldTransferID, deposit.FieldChain, deposit.FieldAsset, deposit.FieldAccount, deposit.FieldAddress, deposit.FieldAmount, deposit.FieldMode, deposit.FieldState, deposit.FieldBlockHash, deposit.FieldTxHash, deposit.FieldSourceEvent:
 			values[i] = new(sql.NullString)
 		case deposit.FieldCreatedAt, deposit.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -155,6 +159,20 @@ func (_m *Deposit) assignValues(columns []string, values []any) error {
 				_m.ReorgedHeight = new(int64)
 				*_m.ReorgedHeight = value.Int64
 			}
+		case deposit.FieldTxHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tx_hash", values[i])
+			} else if value.Valid {
+				_m.TxHash = new(string)
+				*_m.TxHash = value.String
+			}
+		case deposit.FieldSourceEvent:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_event", values[i])
+			} else if value.Valid {
+				_m.SourceEvent = new(string)
+				*_m.SourceEvent = value.String
+			}
 		case deposit.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -243,6 +261,16 @@ func (_m *Deposit) String() string {
 	if v := _m.ReorgedHeight; v != nil {
 		builder.WriteString("reorged_height=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TxHash; v != nil {
+		builder.WriteString("tx_hash=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SourceEvent; v != nil {
+		builder.WriteString("source_event=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")

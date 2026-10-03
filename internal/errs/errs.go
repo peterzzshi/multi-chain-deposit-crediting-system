@@ -17,4 +17,9 @@ var (
 	// beyond what reorg rewind handles (e.g. a reorg landed mid-tick).
 	// Retry cannot fix it — the operator must repair the cursor.
 	ErrChainInconsistent = errors.New("chain inconsistent with cursor")
+
+	// ErrClaimNotOnChain means a custodian claim cannot be verified yet
+	// (node lag or phantom). Transient: the next reconciliation poll or
+	// provider redelivery retries it (ADR 0004).
+	ErrClaimNotOnChain = errors.New("claim not on chain")
 )

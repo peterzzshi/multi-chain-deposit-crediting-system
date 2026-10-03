@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/scanner"
 	"deposit-crediting/internal/store/ent"
 	"deposit-crediting/internal/store/ent/assetconfig"
@@ -14,7 +13,6 @@ import (
 	"deposit-crediting/internal/store/ent/chaincursor"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
-	"deposit-crediting/internal/store/ent/ledgerentry"
 )
 
 // ScannerStore implements scanner.Store over the ent client.
@@ -152,6 +150,7 @@ func (s *ScannerStore) OpenDeposit(ctx context.Context, p scanner.OpenParams) (b
 		SetState(entdeposit.State(p.State)).
 		SetBlockHeight(int64(p.Height)).
 		SetBlockHash(p.Hash).
+		SetTxHash(p.TxHash).
 		Exec(ctx)
 	if ent.IsConstraintError(err) {
 		return false, nil
@@ -163,29 +162,11 @@ func (s *ScannerStore) OpenDeposit(ctx context.Context, p scanner.OpenParams) (b
 }
 
 func (s *ScannerStore) ReincludeDeposit(ctx context.Context, transferID string, height uint64, hash string) error {
-	err := s.client.Deposit.Update().
-		Where(entdeposit.TransferID(transferID)).
-		SetBlockHeight(int64(height)).
-		SetBlockHash(hash).
-		ClearReorgedHeight().
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("store: reinclude %s: %w", transferID, err)
-	}
-	return nil
+	return reincludeDeposit(ctx, s.client, transferID, height, hash)
 }
 
 func (s *ScannerStore) DepositState(ctx context.Context, transferID string) (deposit.State, error) {
-	row, err := s.client.Deposit.Query().
-		Where(entdeposit.TransferID(transferID)).
-		Only(ctx)
-	if ent.IsNotFound(err) {
-		return "", errs.ErrDepositNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("store: deposit state %s: %w", transferID, err)
-	}
-	return deposit.State(row.State), nil
+	return depositState(ctx, s.client, transferID)
 }
 
 func (s *ScannerStore) TrackedDeposits(ctx context.Context, chainID string) ([]scanner.Tracked, error) {
@@ -238,23 +219,9 @@ func (s *ScannerStore) ReorgedDeposits(ctx context.Context, chainID string) ([]s
 }
 
 func (s *ScannerStore) MarkReorged(ctx context.Context, transferID string, height uint64) error {
-	err := s.client.Deposit.Update().
-		Where(entdeposit.TransferID(transferID)).
-		SetReorgedHeight(int64(height)).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("store: mark reorged %s: %w", transferID, err)
-	}
-	return nil
+	return markReorged(ctx, s.client, transferID, height)
 }
 
 func (s *ScannerStore) HasCredit(ctx context.Context, transferID string) (bool, error) {
-	n, err := s.client.LedgerEntry.Query().
-		Where(ledgerentry.Ref(transferID)).
-		Limit(1).
-		Count(ctx)
-	if err != nil {
-		return false, fmt.Errorf("store: credit check %s: %w", transferID, err)
-	}
-	return n > 0, nil
+	return hasCredit(ctx, s.client, transferID)
 }

@@ -38,6 +38,10 @@ const (
 	FieldBlockHash = "block_hash"
 	// FieldReorgedHeight holds the string denoting the reorged_height field in the database.
 	FieldReorgedHeight = "reorged_height"
+	// FieldTxHash holds the string denoting the tx_hash field in the database.
+	FieldTxHash = "tx_hash"
+	// FieldSourceEvent holds the string denoting the source_event field in the database.
+	FieldSourceEvent = "source_event"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -61,6 +65,8 @@ var Columns = []string{
 	FieldBlockHeight,
 	FieldBlockHash,
 	FieldReorgedHeight,
+	FieldTxHash,
+	FieldSourceEvent,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -216,6 +222,16 @@ func ByBlockHash(opts ...sql.OrderTermOption) OrderOption {
 // ByReorgedHeight orders the results by the reorged_height field.
 func ByReorgedHeight(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldReorgedHeight, opts...).ToFunc()
+}
+
+// ByTxHash orders the results by the tx_hash field.
+func ByTxHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTxHash, opts...).ToFunc()
+}
+
+// BySourceEvent orders the results by the source_event field.
+func BySourceEvent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceEvent, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

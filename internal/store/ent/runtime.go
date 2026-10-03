@@ -11,6 +11,7 @@ import (
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 	"deposit-crediting/internal/store/ent/schema"
+	"deposit-crediting/internal/store/ent/sourceevent"
 	"time"
 )
 
@@ -125,11 +126,11 @@ func init() {
 	// deposit.DefaultCreditCycle holds the default value on creation for the credit_cycle field.
 	deposit.DefaultCreditCycle = depositDescCreditCycle.Default.(int)
 	// depositDescCreatedAt is the schema descriptor for created_at field.
-	depositDescCreatedAt := depositFields[12].Descriptor()
+	depositDescCreatedAt := depositFields[14].Descriptor()
 	// deposit.DefaultCreatedAt holds the default value on creation for the created_at field.
 	deposit.DefaultCreatedAt = depositDescCreatedAt.Default.(func() time.Time)
 	// depositDescUpdatedAt is the schema descriptor for updated_at field.
-	depositDescUpdatedAt := depositFields[13].Descriptor()
+	depositDescUpdatedAt := depositFields[15].Descriptor()
 	// deposit.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	deposit.DefaultUpdatedAt = depositDescUpdatedAt.Default.(func() time.Time)
 	// deposit.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -170,4 +171,18 @@ func init() {
 	ledgerentryDescCreatedAt := ledgerentryFields[5].Descriptor()
 	// ledgerentry.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ledgerentry.DefaultCreatedAt = ledgerentryDescCreatedAt.Default.(func() time.Time)
+	sourceeventFields := schema.SourceEvent{}.Fields()
+	_ = sourceeventFields
+	// sourceeventDescProvider is the schema descriptor for provider field.
+	sourceeventDescProvider := sourceeventFields[0].Descriptor()
+	// sourceevent.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	sourceevent.ProviderValidator = sourceeventDescProvider.Validators[0].(func(string) error)
+	// sourceeventDescProviderEventID is the schema descriptor for provider_event_id field.
+	sourceeventDescProviderEventID := sourceeventFields[1].Descriptor()
+	// sourceevent.ProviderEventIDValidator is a validator for the "provider_event_id" field. It is called by the builders before save.
+	sourceevent.ProviderEventIDValidator = sourceeventDescProviderEventID.Validators[0].(func(string) error)
+	// sourceeventDescReceivedAt is the schema descriptor for received_at field.
+	sourceeventDescReceivedAt := sourceeventFields[3].Descriptor()
+	// sourceevent.DefaultReceivedAt holds the default value on creation for the received_at field.
+	sourceevent.DefaultReceivedAt = sourceeventDescReceivedAt.Default.(func() time.Time)
 }

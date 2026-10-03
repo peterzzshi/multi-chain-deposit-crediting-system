@@ -18,6 +18,7 @@ import (
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
+	"deposit-crediting/internal/store/ent/sourceevent"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -43,6 +44,8 @@ type Client struct {
 	DepositAddress *DepositAddressClient
 	// LedgerEntry is the client for interacting with the LedgerEntry builders.
 	LedgerEntry *LedgerEntryClient
+	// SourceEvent is the client for interacting with the SourceEvent builders.
+	SourceEvent *SourceEventClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -61,6 +64,7 @@ func (c *Client) init() {
 	c.Deposit = NewDepositClient(c.config)
 	c.DepositAddress = NewDepositAddressClient(c.config)
 	c.LedgerEntry = NewLedgerEntryClient(c.config)
+	c.SourceEvent = NewSourceEventClient(c.config)
 }
 
 type (
@@ -160,6 +164,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
+		SourceEvent:    NewSourceEventClient(cfg),
 	}, nil
 }
 
@@ -186,6 +191,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
+		SourceEvent:    NewSourceEventClient(cfg),
 	}, nil
 }
 
@@ -216,7 +222,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.LedgerEntry,
+		c.DepositAddress, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Use(hooks...)
 	}
@@ -227,7 +233,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.LedgerEntry,
+		c.DepositAddress, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -250,6 +256,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.DepositAddress.mutate(ctx, m)
 	case *LedgerEntryMutation:
 		return c.LedgerEntry.mutate(ctx, m)
+	case *SourceEventMutation:
+		return c.SourceEvent.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -1186,14 +1194,147 @@ func (c *LedgerEntryClient) mutate(ctx context.Context, m *LedgerEntryMutation) 
 	}
 }
 
+// SourceEventClient is a client for the SourceEvent schema.
+type SourceEventClient struct {
+	config
+}
+
+// NewSourceEventClient returns a client for the SourceEvent from the given config.
+func NewSourceEventClient(c config) *SourceEventClient {
+	return &SourceEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sourceevent.Hooks(f(g(h())))`.
+func (c *SourceEventClient) Use(hooks ...Hook) {
+	c.hooks.SourceEvent = append(c.hooks.SourceEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sourceevent.Intercept(f(g(h())))`.
+func (c *SourceEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SourceEvent = append(c.inters.SourceEvent, interceptors...)
+}
+
+// Create returns a builder for creating a SourceEvent entity.
+func (c *SourceEventClient) Create() *SourceEventCreate {
+	mutation := newSourceEventMutation(c.config, OpCreate)
+	return &SourceEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SourceEvent entities.
+func (c *SourceEventClient) CreateBulk(builders ...*SourceEventCreate) *SourceEventCreateBulk {
+	return &SourceEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SourceEventClient) MapCreateBulk(slice any, setFunc func(*SourceEventCreate, int)) *SourceEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SourceEventCreateBulk{err: fmt.Errorf("calling to SourceEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SourceEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SourceEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SourceEvent.
+func (c *SourceEventClient) Update() *SourceEventUpdate {
+	mutation := newSourceEventMutation(c.config, OpUpdate)
+	return &SourceEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SourceEventClient) UpdateOne(_m *SourceEvent) *SourceEventUpdateOne {
+	mutation := newSourceEventMutation(c.config, OpUpdateOne, withSourceEvent(_m))
+	return &SourceEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SourceEventClient) UpdateOneID(id int) *SourceEventUpdateOne {
+	mutation := newSourceEventMutation(c.config, OpUpdateOne, withSourceEventID(id))
+	return &SourceEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SourceEvent.
+func (c *SourceEventClient) Delete() *SourceEventDelete {
+	mutation := newSourceEventMutation(c.config, OpDelete)
+	return &SourceEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SourceEventClient) DeleteOne(_m *SourceEvent) *SourceEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SourceEventClient) DeleteOneID(id int) *SourceEventDeleteOne {
+	builder := c.Delete().Where(sourceevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SourceEventDeleteOne{builder}
+}
+
+// Query returns a query builder for SourceEvent.
+func (c *SourceEventClient) Query() *SourceEventQuery {
+	return &SourceEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSourceEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SourceEvent entity by its id.
+func (c *SourceEventClient) Get(ctx context.Context, id int) (*SourceEvent, error) {
+	return c.Query().Where(sourceevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SourceEventClient) GetX(ctx context.Context, id int) *SourceEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SourceEventClient) Hooks() []Hook {
+	return c.hooks.SourceEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *SourceEventClient) Interceptors() []Interceptor {
+	return c.inters.SourceEvent
+}
+
+func (c *SourceEventClient) mutate(ctx context.Context, m *SourceEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SourceEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SourceEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SourceEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SourceEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SourceEvent mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
 		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, LedgerEntry []ent.Hook
+		DepositAddress, LedgerEntry, SourceEvent []ent.Hook
 	}
 	inters struct {
 		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, LedgerEntry []ent.Interceptor
+		DepositAddress, LedgerEntry, SourceEvent []ent.Interceptor
 	}
 )

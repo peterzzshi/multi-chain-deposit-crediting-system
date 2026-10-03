@@ -1,8 +1,7 @@
 //go:build integration
 
 // Integration tests against dockerized Postgres: they verify SQL,
-// constraints, and locking, which mocks cannot. Run with
-// `make test-integration`.
+// constraints, and locking, which mocks cannot. Run with `make itest`.
 package store_test
 
 import (
@@ -12,7 +11,6 @@ import (
 	"math/big"
 	"sync"
 	"testing"
-	"time"
 
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/domain/deposit"
@@ -21,39 +19,8 @@ import (
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-
-	_ "github.com/lib/pq"
+	"deposit-crediting/internal/store/storetest"
 )
-
-// Skips when the database is unreachable, so a bare `-tags=integration`
-// run without `make db-up` stays harmless.
-func openTestDB(t *testing.T) *ent.Client {
-	t.Helper()
-	client, err := ent.Open("postgres", "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable&connect_timeout=2")
-	if err != nil {
-		t.Skipf("postgres unavailable, skipping integration test: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := client.Schema.Create(ctx); err != nil {
-		t.Skipf("postgres unreachable at localhost:5432, skipping integration test: %v", err)
-	}
-	t.Cleanup(func() {
-		if _, err := client.LedgerEntry.Delete().Exec(context.Background()); err != nil {
-			t.Errorf("cleanup ledger_entries: %v", err)
-		}
-		if _, err := client.AccountBalance.Delete().Exec(context.Background()); err != nil {
-			t.Errorf("cleanup account_balances: %v", err)
-		}
-		if _, err := client.Deposit.Delete().Exec(context.Background()); err != nil {
-			t.Errorf("cleanup deposits: %v", err)
-		}
-		if err := client.Close(); err != nil {
-			t.Errorf("close client: %v", err)
-		}
-	})
-	return client
-}
 
 // openDeposit simulates the ingest layer: insert the row with the initial
 // state computed by the machine.
@@ -79,7 +46,7 @@ func openDeposit(t *testing.T, client *ent.Client, transferID string, amount str
 }
 
 func TestEngineAgainstPostgres(t *testing.T) {
-	client := openTestDB(t)
+	client := storetest.OpenDB(t)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 
@@ -156,7 +123,7 @@ func TestEngineAgainstPostgres(t *testing.T) {
 // and balance agree, and the balance never goes negative through debits
 // (ADR 0003). Run with -race.
 func TestConcurrentCreditsAndDebits(t *testing.T) {
-	client := openTestDB(t)
+	client := storetest.OpenDB(t)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 

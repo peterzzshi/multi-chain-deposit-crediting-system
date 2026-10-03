@@ -96,3 +96,20 @@ func (c *Chain) Block(_ context.Context, height uint64) (chain.Block, error) {
 	}
 	return c.blocks[height-1], nil
 }
+
+func (c *Chain) TxByHash(_ context.Context, txHash string) (chain.TxLocation, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, b := range c.blocks {
+		var transfers []chain.Transfer
+		for _, tr := range b.Transfers {
+			if tr.TxHash == txHash {
+				transfers = append(transfers, tr)
+			}
+		}
+		if len(transfers) > 0 {
+			return chain.TxLocation{Height: b.Height, Hash: b.Hash, Transfers: transfers}, true, nil
+		}
+	}
+	return chain.TxLocation{}, false, nil
+}

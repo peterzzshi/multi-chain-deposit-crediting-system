@@ -15,7 +15,6 @@ import (
 	"deposit-crediting/internal/adapters/chain"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/domain/identity"
 	"deposit-crediting/internal/errs"
 )
 
@@ -62,6 +61,7 @@ type OpenParams struct {
 	Amount     *big.Int
 	Height     uint64
 	Hash       string
+	TxHash     string
 }
 
 // Store is the scanner's persistence boundary; implemented by
@@ -244,7 +244,7 @@ func (s *Scanner) processBlock(ctx context.Context, height uint64, cursor *Curso
 // openTransfer opens a deposit for one watched transfer, or re-includes an
 // existing REORGED one when its transfer reappears on the canonical chain.
 func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr chain.Transfer, account string, b chain.Block) error {
-	id, err := logicalID(s.cfg.ChainID, tr)
+	id, err := tr.LogicalID(s.cfg.ChainID)
 	if err != nil {
 		return err
 	}
@@ -267,6 +267,7 @@ func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr chain.Tr
 		Amount:     tr.Amount,
 		Height:     b.Height,
 		Hash:       b.Hash,
+		TxHash:     tr.TxHash,
 	})
 	if err != nil {
 		return fmt.Errorf("scanner: open deposit %s: %w", transferID, err)
@@ -391,16 +392,4 @@ func transferTargets(transfers []chain.Transfer) []string {
 		}
 	}
 	return addrs
-}
-
-func logicalID(chainID string, tr chain.Transfer) (identity.LogicalTransferID, error) {
-	switch tr.Kind {
-	case chain.Token:
-		return identity.NewTokenTransfer(chainID, tr.TxHash, tr.Asset, tr.LogIndex)
-	case chain.Native:
-		return identity.NewNativeTransfer(chainID, tr.TxHash)
-	case chain.Internal:
-		return identity.NewInternalNativeTransfer(chainID, tr.TxHash, tr.TraceIndex)
-	}
-	return nil, fmt.Errorf("scanner: unknown transfer kind %q", tr.Kind)
 }

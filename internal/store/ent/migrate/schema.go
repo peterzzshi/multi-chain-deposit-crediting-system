@@ -103,6 +103,8 @@ var (
 		{Name: "block_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "block_hash", Type: field.TypeString, Nullable: true},
 		{Name: "reorged_height", Type: field.TypeInt64, Nullable: true},
+		{Name: "tx_hash", Type: field.TypeString, Nullable: true},
+		{Name: "source_event", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -169,6 +171,27 @@ var (
 			},
 		},
 	}
+	// SourceEventsColumns holds the columns for the "source_events" table.
+	SourceEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "provider", Type: field.TypeString},
+		{Name: "provider_event_id", Type: field.TypeString},
+		{Name: "payload", Type: field.TypeJSON, Nullable: true},
+		{Name: "received_at", Type: field.TypeTime},
+	}
+	// SourceEventsTable holds the schema information for the "source_events" table.
+	SourceEventsTable = &schema.Table{
+		Name:       "source_events",
+		Columns:    SourceEventsColumns,
+		PrimaryKey: []*schema.Column{SourceEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sourceevent_provider_provider_event_id",
+				Unique:  true,
+				Columns: []*schema.Column{SourceEventsColumns[1], SourceEventsColumns[2]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AccountBalancesTable,
@@ -178,6 +201,7 @@ var (
 		DepositsTable,
 		DepositAddressesTable,
 		LedgerEntriesTable,
+		SourceEventsTable,
 	}
 )
 

@@ -132,6 +132,34 @@ func (_c *DepositCreate) SetNillableReorgedHeight(v *int64) *DepositCreate {
 	return _c
 }
 
+// SetTxHash sets the "tx_hash" field.
+func (_c *DepositCreate) SetTxHash(v string) *DepositCreate {
+	_c.mutation.SetTxHash(v)
+	return _c
+}
+
+// SetNillableTxHash sets the "tx_hash" field if the given value is not nil.
+func (_c *DepositCreate) SetNillableTxHash(v *string) *DepositCreate {
+	if v != nil {
+		_c.SetTxHash(*v)
+	}
+	return _c
+}
+
+// SetSourceEvent sets the "source_event" field.
+func (_c *DepositCreate) SetSourceEvent(v string) *DepositCreate {
+	_c.mutation.SetSourceEvent(v)
+	return _c
+}
+
+// SetNillableSourceEvent sets the "source_event" field if the given value is not nil.
+func (_c *DepositCreate) SetNillableSourceEvent(v *string) *DepositCreate {
+	if v != nil {
+		_c.SetSourceEvent(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *DepositCreate) SetCreatedAt(v time.Time) *DepositCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -356,6 +384,14 @@ func (_c *DepositCreate) createSpec() (*Deposit, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ReorgedHeight(); ok {
 		_spec.SetField(deposit.FieldReorgedHeight, field.TypeInt64, value)
 		_node.ReorgedHeight = &value
+	}
+	if value, ok := _c.mutation.TxHash(); ok {
+		_spec.SetField(deposit.FieldTxHash, field.TypeString, value)
+		_node.TxHash = &value
+	}
+	if value, ok := _c.mutation.SourceEvent(); ok {
+		_spec.SetField(deposit.FieldSourceEvent, field.TypeString, value)
+		_node.SourceEvent = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(deposit.FieldCreatedAt, field.TypeTime, value)

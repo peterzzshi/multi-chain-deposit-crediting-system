@@ -104,6 +104,16 @@ func ReorgedHeight(v int64) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldReorgedHeight, v))
 }
 
+// TxHash applies equality check predicate on the "tx_hash" field. It's identical to TxHashEQ.
+func TxHash(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldTxHash, v))
+}
+
+// SourceEvent applies equality check predicate on the "source_event" field. It's identical to SourceEventEQ.
+func SourceEvent(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldSourceEvent, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldCreatedAt, v))
@@ -757,6 +767,156 @@ func ReorgedHeightIsNil() predicate.Deposit {
 // ReorgedHeightNotNil applies the NotNil predicate on the "reorged_height" field.
 func ReorgedHeightNotNil() predicate.Deposit {
 	return predicate.Deposit(sql.FieldNotNull(FieldReorgedHeight))
+}
+
+// TxHashEQ applies the EQ predicate on the "tx_hash" field.
+func TxHashEQ(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldTxHash, v))
+}
+
+// TxHashNEQ applies the NEQ predicate on the "tx_hash" field.
+func TxHashNEQ(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNEQ(FieldTxHash, v))
+}
+
+// TxHashIn applies the In predicate on the "tx_hash" field.
+func TxHashIn(vs ...string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldIn(FieldTxHash, vs...))
+}
+
+// TxHashNotIn applies the NotIn predicate on the "tx_hash" field.
+func TxHashNotIn(vs ...string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotIn(FieldTxHash, vs...))
+}
+
+// TxHashGT applies the GT predicate on the "tx_hash" field.
+func TxHashGT(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGT(FieldTxHash, v))
+}
+
+// TxHashGTE applies the GTE predicate on the "tx_hash" field.
+func TxHashGTE(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGTE(FieldTxHash, v))
+}
+
+// TxHashLT applies the LT predicate on the "tx_hash" field.
+func TxHashLT(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLT(FieldTxHash, v))
+}
+
+// TxHashLTE applies the LTE predicate on the "tx_hash" field.
+func TxHashLTE(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLTE(FieldTxHash, v))
+}
+
+// TxHashContains applies the Contains predicate on the "tx_hash" field.
+func TxHashContains(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldContains(FieldTxHash, v))
+}
+
+// TxHashHasPrefix applies the HasPrefix predicate on the "tx_hash" field.
+func TxHashHasPrefix(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldHasPrefix(FieldTxHash, v))
+}
+
+// TxHashHasSuffix applies the HasSuffix predicate on the "tx_hash" field.
+func TxHashHasSuffix(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldHasSuffix(FieldTxHash, v))
+}
+
+// TxHashIsNil applies the IsNil predicate on the "tx_hash" field.
+func TxHashIsNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldIsNull(FieldTxHash))
+}
+
+// TxHashNotNil applies the NotNil predicate on the "tx_hash" field.
+func TxHashNotNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotNull(FieldTxHash))
+}
+
+// TxHashEqualFold applies the EqualFold predicate on the "tx_hash" field.
+func TxHashEqualFold(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEqualFold(FieldTxHash, v))
+}
+
+// TxHashContainsFold applies the ContainsFold predicate on the "tx_hash" field.
+func TxHashContainsFold(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldContainsFold(FieldTxHash, v))
+}
+
+// SourceEventEQ applies the EQ predicate on the "source_event" field.
+func SourceEventEQ(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldSourceEvent, v))
+}
+
+// SourceEventNEQ applies the NEQ predicate on the "source_event" field.
+func SourceEventNEQ(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNEQ(FieldSourceEvent, v))
+}
+
+// SourceEventIn applies the In predicate on the "source_event" field.
+func SourceEventIn(vs ...string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldIn(FieldSourceEvent, vs...))
+}
+
+// SourceEventNotIn applies the NotIn predicate on the "source_event" field.
+func SourceEventNotIn(vs ...string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotIn(FieldSourceEvent, vs...))
+}
+
+// SourceEventGT applies the GT predicate on the "source_event" field.
+func SourceEventGT(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGT(FieldSourceEvent, v))
+}
+
+// SourceEventGTE applies the GTE predicate on the "source_event" field.
+func SourceEventGTE(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGTE(FieldSourceEvent, v))
+}
+
+// SourceEventLT applies the LT predicate on the "source_event" field.
+func SourceEventLT(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLT(FieldSourceEvent, v))
+}
+
+// SourceEventLTE applies the LTE predicate on the "source_event" field.
+func SourceEventLTE(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLTE(FieldSourceEvent, v))
+}
+
+// SourceEventContains applies the Contains predicate on the "source_event" field.
+func SourceEventContains(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldContains(FieldSourceEvent, v))
+}
+
+// SourceEventHasPrefix applies the HasPrefix predicate on the "source_event" field.
+func SourceEventHasPrefix(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldHasPrefix(FieldSourceEvent, v))
+}
+
+// SourceEventHasSuffix applies the HasSuffix predicate on the "source_event" field.
+func SourceEventHasSuffix(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldHasSuffix(FieldSourceEvent, v))
+}
+
+// SourceEventIsNil applies the IsNil predicate on the "source_event" field.
+func SourceEventIsNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldIsNull(FieldSourceEvent))
+}
+
+// SourceEventNotNil applies the NotNil predicate on the "source_event" field.
+func SourceEventNotNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotNull(FieldSourceEvent))
+}
+
+// SourceEventEqualFold applies the EqualFold predicate on the "source_event" field.
+func SourceEventEqualFold(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEqualFold(FieldSourceEvent, v))
+}
+
+// SourceEventContainsFold applies the ContainsFold predicate on the "source_event" field.
+func SourceEventContainsFold(v string) predicate.Deposit {
+	return predicate.Deposit(sql.FieldContainsFold(FieldSourceEvent, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

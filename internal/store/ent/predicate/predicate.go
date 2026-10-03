@@ -26,3 +26,6 @@ type DepositAddress func(*sql.Selector)
 
 // LedgerEntry is the predicate function for ledgerentry builders.
 type LedgerEntry func(*sql.Selector)
+
+// SourceEvent is the predicate function for sourceevent builders.
+type SourceEvent func(*sql.Selector)

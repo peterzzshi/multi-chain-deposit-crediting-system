@@ -35,6 +35,12 @@ func (Deposit) Fields() []ent.Field {
 		// Canonical head height when the reorg was detected; start of the
 		// reorg window countdown.
 		field.Int64("reorged_height").Optional().Nillable(),
+		// Transaction hash carrying the transfer; lets the custodian
+		// re-checker locate a re-included transfer (TxByHash).
+		field.String("tx_hash").Optional().Nillable(),
+		// Originating custodian source event (provider:provider_event_id)
+		// for audit; empty in self-built mode.
+		field.String("source_event").Optional().Nillable(),
 		field.Time("created_at").Default(timeNow).Immutable(),
 		field.Time("updated_at").Default(timeNow).UpdateDefault(timeNow),
 	}

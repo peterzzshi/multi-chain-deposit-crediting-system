@@ -26,6 +26,8 @@ type Tx struct {
 	DepositAddress *DepositAddressClient
 	// LedgerEntry is the client for interacting with the LedgerEntry builders.
 	LedgerEntry *LedgerEntryClient
+	// SourceEvent is the client for interacting with the SourceEvent builders.
+	SourceEvent *SourceEventClient
 
 	// lazily loaded.
 	client     *Client
@@ -164,6 +166,7 @@ func (tx *Tx) init() {
 	tx.Deposit = NewDepositClient(tx.config)
 	tx.DepositAddress = NewDepositAddressClient(tx.config)
 	tx.LedgerEntry = NewLedgerEntryClient(tx.config)
+	tx.SourceEvent = NewSourceEventClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
