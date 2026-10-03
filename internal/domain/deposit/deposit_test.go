@@ -3,10 +3,11 @@ package deposit
 import (
 	"errors"
 	"testing"
+
+	"deposit-crediting/internal/errs"
 )
 
-// TestTransitionTable covers every legal (state, event) pair in
-// docs/state-machine.md.
+// Every legal (state, event) pair in docs/state-machine.md.
 func TestTransitionTable(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -40,8 +41,40 @@ func TestTransitionTable(t *testing.T) {
 	}
 }
 
-// TestTransitionRejectsIllegalPairs pins down pairs that must never
-// happen, so a buggy caller fails loudly instead of corrupting state.
+// Duplicated and late deliveries are expected from every ingest source:
+// an event already reflected in the state is a no-op, not an error.
+func TestTransitionRedeliveriesAreNoOps(t *testing.T) {
+	tests := []struct {
+		name  string
+		state State
+		event Event
+	}{
+		{"credit redelivered", StateCredited, EventDepthReached},
+		{"credit redelivered after finality", StateFinalized, EventDepthReached},
+		{"finality redelivered", StateFinalized, EventFinalityReached},
+		{"reorg redelivered", StateReorged, EventReorgedOut},
+		{"reorg redelivered after drop", StateDropped, EventReorgedOut},
+		{"reorg redelivered after reversal", StateReversed, EventReorgedOut},
+		{"re-inclusion redelivered", StatePending, EventReincluded},
+		{"uncredited expiry redelivered", StateDropped, EventWindowExpiredUncredited},
+		{"credited expiry redelivered", StateReversed, EventWindowExpiredCredited},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotState, gotEffect, err := Transition(tt.state, tt.event)
+			if err != nil {
+				t.Fatalf("Transition(%s, %s) unexpected error: %v", tt.state, tt.event, err)
+			}
+			if gotState != tt.state || gotEffect != EffectNone {
+				t.Errorf("Transition(%s, %s) = (%s, %v); want identity (%s, %v)",
+					tt.state, tt.event, gotState, gotEffect, tt.state, EffectNone)
+			}
+		})
+	}
+}
+
+// Pairs that must never happen: a buggy caller fails loudly instead of
+// corrupting state.
 func TestTransitionRejectsIllegalPairs(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -49,27 +82,23 @@ func TestTransitionRejectsIllegalPairs(t *testing.T) {
 		event Event
 	}{
 		{"finalized cannot reorg out", StateFinalized, EventReorgedOut},
-		{"finalized cannot credit again", StateFinalized, EventDepthReached},
 		{"dropped is absorbing", StateDropped, EventReincluded},
 		{"below minimum is absorbing", StateBelowMinimum, EventDepthReached},
 		{"pending cannot finalize", StatePending, EventFinalityReached},
 		{"credited cannot be re-observed", StateCredited, EventObserved},
 		{"reorged cannot credit directly", StateReorged, EventDepthReached},
-		{"reversed cannot reverse again", StateReversed, EventWindowExpiredCredited},
 		{"entry cannot skip observation", StateNone, EventDepthReached},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := Transition(tt.state, tt.event)
-			if !errors.Is(err, ErrIllegalTransition) {
-				t.Errorf("Transition(%s, %s) error = %v; want ErrIllegalTransition", tt.state, tt.event, err)
+			if !errors.Is(err, errs.ErrIllegalTransition) {
+				t.Errorf("Transition(%s, %s) error = %v; want errs.ErrIllegalTransition", tt.state, tt.event, err)
 			}
 		})
 	}
 }
 
-// TestFullLifecycle walks the happy path and the reorg-reversal path end
-// to end, mirroring the walkthrough scenarios.
 func TestFullLifecycle(t *testing.T) {
 	t.Run("observe credit finalize", func(t *testing.T) {
 		s := StateNone

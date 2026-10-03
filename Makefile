@@ -1,22 +1,20 @@
-.PHONY: fmt vet test build generate db-up db-down
+.PHONY: check test itest generate mock
 
-fmt:
-	go fmt ./...
-
-vet:
+check:
+	gofmt -w .
 	go vet ./...
+	go build ./...
+	go test -race ./...
 
 test:
-	go test ./...
+	go test -race ./...
 
-build:
-	go build ./...
+itest:
+	docker compose up -d postgres
+	go test -race -tags=integration ./internal/store/...
 
 generate:
 	go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/lock --target ./internal/store/ent ./internal/store/ent/schema
 
-db-up:
-	docker compose up -d postgres
-
-db-down:
-	docker compose down
+mock:
+	go run github.com/vektra/mockery/v3@v3.8.0

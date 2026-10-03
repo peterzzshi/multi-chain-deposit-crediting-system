@@ -4,12 +4,14 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+
+	"deposit-crediting/internal/errs"
 )
 
 func TestApplyCreditAndDebit(t *testing.T) {
-	credit, err := NewCredit("alice", "ETH", big.NewInt(100), "evm:0xabc:native")
+	credit, err := New(Credit, "alice", "ETH", big.NewInt(100), "evm:0xabc:native")
 	if err != nil {
-		t.Fatalf("NewCredit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	balance, err := Apply(nil, credit)
 	if err != nil {
@@ -19,9 +21,9 @@ func TestApplyCreditAndDebit(t *testing.T) {
 		t.Fatalf("Apply(nil, credit) = %s; want %s", got, want)
 	}
 
-	debit, err := NewDebit("alice", "ETH", big.NewInt(40), "withdrawal:1")
+	debit, err := New(Debit, "alice", "ETH", big.NewInt(40), "withdrawal:1")
 	if err != nil {
-		t.Fatalf("NewDebit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	balance, err = Apply(balance, debit)
 	if err != nil {
@@ -33,21 +35,21 @@ func TestApplyCreditAndDebit(t *testing.T) {
 }
 
 func TestApplyDebitRejectsInsufficientFunds(t *testing.T) {
-	debit, err := NewDebit("alice", "ETH", big.NewInt(50), "withdrawal:1")
+	debit, err := New(Debit, "alice", "ETH", big.NewInt(50), "withdrawal:1")
 	if err != nil {
-		t.Fatalf("NewDebit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
-	if _, err := Apply(big.NewInt(40), debit); !errors.Is(err, ErrInsufficientFunds) {
-		t.Errorf("Apply(40, debit 50) error = %v; want ErrInsufficientFunds", err)
+	if _, err := Apply(big.NewInt(40), debit); !errors.Is(err, errs.ErrInsufficientFunds) {
+		t.Errorf("Apply(40, debit 50) error = %v; want errs.ErrInsufficientFunds", err)
 	}
 }
 
-// TestReversalMayDriveBalanceNegative pins the ADR 0002 rule: a user who
-// spent a credited deposit owes the platform after a reorg reversal.
+// ADR 0002: a user who spent a credited deposit owes the platform after a
+// reorg reversal.
 func TestReversalMayDriveBalanceNegative(t *testing.T) {
-	credit, err := NewCredit("alice", "ETH", big.NewInt(100), "evm:0xabc:native")
+	credit, err := New(Credit, "alice", "ETH", big.NewInt(100), "evm:0xabc:native")
 	if err != nil {
-		t.Fatalf("NewCredit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	reversal, err := Reverse(credit)
 	if err != nil {
@@ -66,55 +68,55 @@ func TestReversalMayDriveBalanceNegative(t *testing.T) {
 }
 
 func TestReverseOnlyAppliesToCredits(t *testing.T) {
-	debit, err := NewDebit("alice", "ETH", big.NewInt(10), "withdrawal:1")
+	debit, err := New(Debit, "alice", "ETH", big.NewInt(10), "withdrawal:1")
 	if err != nil {
-		t.Fatalf("NewDebit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
-	if _, err := Reverse(debit); !errors.Is(err, ErrInvalidEntry) {
-		t.Errorf("Reverse(debit) error = %v; want ErrInvalidEntry", err)
+	if _, err := Reverse(debit); !errors.Is(err, errs.ErrInvalidEntry) {
+		t.Errorf("Reverse(debit) error = %v; want errs.ErrInvalidEntry", err)
 	}
 }
 
-// TestErrorCategories exercises the consumer-side pattern: distinguish
-// retryable funds problems from programming errors with errors.Is.
+// The consumer-side pattern: distinguish retryable funds problems from
+// programming errors with errors.Is.
 func TestErrorCategories(t *testing.T) {
-	debit, err := NewDebit("alice", "ETH", big.NewInt(50), "withdrawal:1")
+	debit, err := New(Debit, "alice", "ETH", big.NewInt(50), "withdrawal:1")
 	if err != nil {
-		t.Fatalf("NewDebit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	_, applyErr := Apply(big.NewInt(40), debit)
 	switch {
-	case errors.Is(applyErr, ErrInsufficientFunds):
+	case errors.Is(applyErr, errs.ErrInsufficientFunds):
 		// retryable: top up and try again
-	case errors.Is(applyErr, ErrInvalidEntry):
-		t.Fatalf("Apply() = ErrInvalidEntry; want ErrInsufficientFunds")
+	case errors.Is(applyErr, errs.ErrInvalidEntry):
+		t.Fatalf("Apply() = errs.ErrInvalidEntry; want errs.ErrInsufficientFunds")
 	default:
-		t.Fatalf("Apply() error = %v; want ErrInsufficientFunds", applyErr)
+		t.Fatalf("Apply() error = %v; want errs.ErrInsufficientFunds", applyErr)
 	}
 }
 
-func TestReversePreservesReference(t *testing.T) {
-	credit, err := NewCredit("alice", "ETH", big.NewInt(100), "evm:0xabc:native")
+func TestReverseDerivesUniqueReference(t *testing.T) {
+	credit, err := New(Credit, "alice", "ETH", big.NewInt(100), "evm:0xabc:native")
 	if err != nil {
-		t.Fatalf("NewCredit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	reversal, err := Reverse(credit)
 	if err != nil {
 		t.Fatalf("Reverse() unexpected error: %v", err)
 	}
-	if got, want := reversal.Ref, credit.Ref; got != want {
-		t.Errorf("reversal.Ref = %q; want %q (original credit ref)", got, want)
+	if got, want := reversal.Ref, "reversal:"+credit.Ref; got != want {
+		t.Errorf("reversal.Ref = %q; want %q", got, want)
 	}
-	if got, want := reversal.Type, TypeReversal; got != want {
+	if got, want := reversal.Type, Reversal; got != want {
 		t.Errorf("reversal.Type = %s; want %s", got, want)
 	}
 }
 
 func TestApplyDoesNotMutateOperands(t *testing.T) {
 	balance := big.NewInt(100)
-	credit, err := NewCredit("alice", "ETH", big.NewInt(1), "evm:0xabc:native")
+	credit, err := New(Credit, "alice", "ETH", big.NewInt(1), "evm:0xabc:native")
 	if err != nil {
-		t.Fatalf("NewCredit() unexpected error: %v", err)
+		t.Fatalf("New() unexpected error: %v", err)
 	}
 	if _, err := Apply(balance, credit); err != nil {
 		t.Fatalf("Apply() unexpected error: %v", err)
@@ -124,26 +126,29 @@ func TestApplyDoesNotMutateOperands(t *testing.T) {
 	}
 }
 
-func TestNewEntryRejectsBadInput(t *testing.T) {
+func TestNewRejectsBadInput(t *testing.T) {
 	tests := []struct {
 		name    string
+		typ     TransactionType
 		account string
 		asset   string
 		amount  *big.Int
 		ref     string
 	}{
-		{"empty account", "", "ETH", big.NewInt(1), "ref"},
-		{"empty asset", "alice", "", big.NewInt(1), "ref"},
-		{"empty ref", "alice", "ETH", big.NewInt(1), ""},
-		{"zero amount", "alice", "ETH", big.NewInt(0), "ref"},
-		{"negative amount", "alice", "ETH", big.NewInt(-5), "ref"},
-		{"nil amount", "alice", "ETH", nil, "ref"},
+		{"unknown type", "interest", "alice", "ETH", big.NewInt(1), "ref"},
+		{"empty type", "", "alice", "ETH", big.NewInt(1), "ref"},
+		{"empty account", Credit, "", "ETH", big.NewInt(1), "ref"},
+		{"empty asset", Credit, "alice", "", big.NewInt(1), "ref"},
+		{"empty ref", Credit, "alice", "ETH", big.NewInt(1), ""},
+		{"zero amount", Credit, "alice", "ETH", big.NewInt(0), "ref"},
+		{"negative amount", Credit, "alice", "ETH", big.NewInt(-5), "ref"},
+		{"nil amount", Credit, "alice", "ETH", nil, "ref"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := NewCredit(tt.account, tt.asset, tt.amount, tt.ref); !errors.Is(err, ErrInvalidEntry) {
-				t.Errorf("NewCredit(%q, %q, %v, %q) error = %v; want ErrInvalidEntry",
-					tt.account, tt.asset, tt.amount, tt.ref, err)
+			if _, err := New(tt.typ, tt.account, tt.asset, tt.amount, tt.ref); !errors.Is(err, errs.ErrInvalidEntry) {
+				t.Errorf("New(%s, %q, %q, %v, %q) error = %v; want errs.ErrInvalidEntry",
+					tt.typ, tt.account, tt.asset, tt.amount, tt.ref, err)
 			}
 		})
 	}

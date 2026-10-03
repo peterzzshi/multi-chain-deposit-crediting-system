@@ -3,6 +3,8 @@ package identity
 import (
 	"errors"
 	"testing"
+
+	"deposit-crediting/internal/errs"
 )
 
 func TestSourceEventIDString(t *testing.T) {
@@ -27,8 +29,8 @@ func TestNewSourceEventIDRejectsBadParts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := NewSourceEventID(tt.provider, tt.eventID); !errors.Is(err, ErrInvalidPart) {
-				t.Errorf("NewSourceEventID(%q, %q) error = %v; want ErrInvalidPart", tt.provider, tt.eventID, err)
+			if _, err := NewSourceEventID(tt.provider, tt.eventID); !errors.Is(err, errs.ErrInvalidPart) {
+				t.Errorf("NewSourceEventID(%q, %q) error = %v; want errs.ErrInvalidPart", tt.provider, tt.eventID, err)
 			}
 		})
 	}
@@ -97,8 +99,8 @@ func TestNewTokenTransferRejectsBadInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := NewTokenTransfer(tt.chain, tt.txHash, tt.contract, tt.logIndex); !errors.Is(err, ErrInvalidPart) {
-				t.Errorf("NewTokenTransfer(%q, %q, %q, %d) error = %v; want ErrInvalidPart",
+			if _, err := NewTokenTransfer(tt.chain, tt.txHash, tt.contract, tt.logIndex); !errors.Is(err, errs.ErrInvalidPart) {
+				t.Errorf("NewTokenTransfer(%q, %q, %q, %d) error = %v; want errs.ErrInvalidPart",
 					tt.chain, tt.txHash, tt.contract, tt.logIndex, err)
 			}
 		})
@@ -106,7 +108,7 @@ func TestNewTokenTransferRejectsBadInput(t *testing.T) {
 }
 
 func TestNewInternalNativeTransferRejectsNegativeTraceIndex(t *testing.T) {
-	if _, err := NewInternalNativeTransfer("evm", "0xabc", -1); !errors.Is(err, ErrInvalidPart) {
-		t.Errorf("NewInternalNativeTransfer() error = %v for negative trace index; want ErrInvalidPart", err)
+	if _, err := NewInternalNativeTransfer("evm", "0xabc", -1); !errors.Is(err, errs.ErrInvalidPart) {
+		t.Errorf("NewInternalNativeTransfer() error = %v for negative trace index; want errs.ErrInvalidPart", err)
 	}
 }

@@ -1,0 +1,10 @@
+template: testify
+packages:
+  deposit-crediting/internal/credit:
+    config:
+      dir: "internal/credit/mocks"
+      filename: "mock_{{.InterfaceName}}.go"
+      pkgname: mocks
+    interfaces:
+      Store:
+      Tx:
