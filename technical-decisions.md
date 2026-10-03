@@ -46,15 +46,15 @@ PostgreSQL is the transactional source of truth. Normalized fields used for look
 
 First decomposition:
 
-| Table | Contents |
-|---|---|
-| `asset_configs` | chain, asset/contract, decimals, custody mode, confirmation policy |
-| `deposit_addresses` | user/account, chain, address, mode, asset scope, active/version metadata |
-| `chain_cursors`, `chain_blocks` | last processed height/hash + recent parent/hash window for restart and reorg detection |
-| `source_events` | append-only webhook/provider envelopes with source event IDs and raw payloads |
-| `deposits` | one logical creditable transfer, its lifecycle state, canonical block facts |
-| `ledger_entries` | append-only credits, debits, reversals, with a unique source reference |
-| `account_balances` | optional materialized balances for fast reads, maintained in the same transaction as entries |
+| Table                           | Contents                                                                                     |
+|---------------------------------|----------------------------------------------------------------------------------------------|
+| `asset_configs`                 | chain, asset/contract, decimals, custody mode, confirmation policy                           |
+| `deposit_addresses`             | user/account, chain, address, mode, asset scope, active/version metadata                     |
+| `chain_cursors`, `chain_blocks` | last processed height/hash + recent parent/hash window for restart and reorg detection       |
+| `source_events`                 | append-only webhook/provider envelopes with source event IDs and raw payloads                |
+| `deposits`                      | one logical creditable transfer, its lifecycle state, canonical block facts                  |
+| `ledger_entries`                | append-only credits, debits, reversals, with a unique source reference                       |
+| `account_balances`              | optional materialized balances for fast reads, maintained in the same transaction as entries |
 
 Keep the concepts separate — immutable observations, the current deposit projection, the ledger — even if the table count changes. A join is not inherently slow: foreign-key and composite indexes, selective predicates, reasonable row sizes, and `EXPLAIN (ANALYZE, BUFFERS)` matter more than avoiding normalization. Tune PostgreSQL after measuring (pool size, autovacuum, statistics, memory, partitioning); query shape and indexes come first. Do not put large raw payloads on every hot-path row without a retention plan.
 
@@ -99,11 +99,11 @@ tx_per_second  = tx_per_block / block_time
 tx_per_day     = blocks_per_day * tx_per_block
 ```
 
-| Chain | Block time | Blocks/day | Average tx/s | Transactions/day |
-|---|---:|---:|---:|---:|
-| EVM-like | 12 s | 7,200 | 250 | 21.6 million |
-| Faster chain | 2 s | 43,200 | 1,500 | 129.6 million |
-| **Total** | | **50,400** | **1,750** | **151.2 million** |
+| Chain        | Block time | Blocks/day | Average tx/s |  Transactions/day |
+|--------------|-----------:|-----------:|-------------:|------------------:|
+| EVM-like     |       12 s |      7,200 |          250 |      21.6 million |
+| Faster chain |        2 s |     43,200 |        1,500 |     129.6 million |
+| **Total**    |            | **50,400** |    **1,750** | **151.2 million** |
 
 Size production for a peak multiplier, not the average: at 2x peak the scanner and parsing pipeline sustain ~3,500 tx/s, with headroom for replaying a reorg window. A block is a bounded batch of ~3,000 transactions; the stream never loads a whole day into memory.
 
@@ -166,6 +166,20 @@ At 0.1% match, `r` ≈ 1.75 matched transfers/s; at 1%, ≈ 17.5/s. With four du
 Replay is CPU/DB-bound, not arrival-bound, so catch-up runs faster than live ingest: re-filtering the full retained window (worst case 5,000 fast-chain blocks ≈ 15M tx) at ~10k tx/s takes ~25 minutes for an exceptional deep event; typical reorgs of 2–10 blocks replay in seconds. Cursor commits are ~35/min — trivial.
 
 These are order-of-magnitude planning numbers. Replace the match rate, payload size, peak multiplier, retention period, and replay depth with measured or explicitly agreed assumptions before the walkthrough. The reorg-risk models in [docs/risk-policy.md](docs/risk-policy.md) tune confirmation and exposure policy; they do not substitute for this throughput, memory, and storage estimate.
+
+### Measured (P5 benchmarks, 2026-10-03)
+
+Environment: Apple M2, dockerized Postgres 16, single test client; integration benchmarks in `internal/store/bench_integration_test.go` and `internal/scanner/bench_integration_test.go` (`go test -tags=integration -bench`). Order-of-magnitude validation of the estimates above, not a production sizing.
+
+| Path                                                            |                            Estimate |                                                 Measured | Verdict                                                             |
+|-----------------------------------------------------------------|------------------------------------:|---------------------------------------------------------:|---------------------------------------------------------------------|
+| Credit write path (sequential, one account)                     | ~70–700 writes/s peak (system-wide) | ~355 credits/s (~2.8 ms/credit, ~8 statements in one tx) | per-account serialization bound, as designed                        |
+| Credit write path (parallel, 16 accounts)                       |                                   — |                                           ~783 credits/s | system-wide peak clears the 700/s stress case                       |
+| External debits (sequential)                                    |                                   — |                                            ~936 debits/s | headroom                                                            |
+| Scanner filter (10k-address table, 3,000-tx blocks, 0.1% match) |              ~3,500 tx/s at 2x peak |                                            ~228,000 tx/s | ~65x headroom; re-test at 5M addresses before Bloom filter decision |
+| Deep-reorg rewind + replay (10 blocks)                          |                             seconds |                                                   ~58 ms | well inside one block interval                                      |
+
+Caveats: benchmark Postgres runs unsynchronized (local docker); the 5M-row address table will slow `ResolveRecipients` vs the 10k-row test — the unique `(chain, address)` index keeps lookup O(log n), so degradation should be modest, but the Bloom pre-filter decision waits for that measurement (non-goals).
 
 ## Open Design Work — status
 
