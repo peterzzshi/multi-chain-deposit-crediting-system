@@ -1,0 +1,7 @@
+# Chain facts are the source of truth in custodian mode
+
+**Decision.** Custodian webhooks are a low-latency hint channel, not a basis for crediting: they may be duplicated, reordered, delayed by minutes, or never arrive. In custodian mode the credit decision rests on the same foundation as self-built mode — verified chain facts plus the platform's own confirmation policy.
+
+Concretely: a crediting event opens a deposit; the platform verifies the transfer on-chain through the node interface (targeted queries, not necessarily a full scan) and measures confirmation depth itself. Attribution never depends on the webhook either — the platform assigned every custodian address to a user, so an on-chain transfer to a known custodian address maps through our own address table. Missed webhooks are covered by a periodic reconciliation poll against the custodian query API (overlapping time windows). Scanning custodian addresses as defense-in-depth is **deferred**: per-deposit targeted queries plus the reconciliation poll suffice at these volumes (Q22); the option stays open behind the common ingest interface.
+
+**Rejected alternative.** Crediting on webhook receipt (or on vault balance-change events) — faster, but it makes the custodian's notification pipeline a single point of failure for both missed and phantom credits. Vault events are aggregate and unattributed, so they can only ever serve reconciliation.
