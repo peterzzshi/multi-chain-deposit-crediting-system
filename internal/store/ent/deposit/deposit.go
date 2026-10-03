@@ -36,6 +36,8 @@ const (
 	FieldBlockHeight = "block_height"
 	// FieldBlockHash holds the string denoting the block_hash field in the database.
 	FieldBlockHash = "block_hash"
+	// FieldReorgedHeight holds the string denoting the reorged_height field in the database.
+	FieldReorgedHeight = "reorged_height"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -58,6 +60,7 @@ var Columns = []string{
 	FieldCreditCycle,
 	FieldBlockHeight,
 	FieldBlockHash,
+	FieldReorgedHeight,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -208,6 +211,11 @@ func ByBlockHeight(opts ...sql.OrderTermOption) OrderOption {
 // ByBlockHash orders the results by the block_hash field.
 func ByBlockHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBlockHash, opts...).ToFunc()
+}
+
+// ByReorgedHeight orders the results by the reorged_height field.
+func ByReorgedHeight(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReorgedHeight, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

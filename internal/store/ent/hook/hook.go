@@ -32,6 +32,30 @@ func (f AssetConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AssetConfigMutation", m)
 }
 
+// The CanonicalBlockFunc type is an adapter to allow the use of ordinary
+// function as CanonicalBlock mutator.
+type CanonicalBlockFunc func(context.Context, *ent.CanonicalBlockMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CanonicalBlockFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CanonicalBlockMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CanonicalBlockMutation", m)
+}
+
+// The ChainCursorFunc type is an adapter to allow the use of ordinary
+// function as ChainCursor mutator.
+type ChainCursorFunc func(context.Context, *ent.ChainCursorMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ChainCursorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ChainCursorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChainCursorMutation", m)
+}
+
 // The DepositFunc type is an adapter to allow the use of ordinary
 // function as Deposit mutator.
 type DepositFunc func(context.Context, *ent.DepositMutation) (ent.Value, error)

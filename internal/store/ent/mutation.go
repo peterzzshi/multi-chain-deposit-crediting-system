@@ -6,6 +6,8 @@ import (
 	"context"
 	"deposit-crediting/internal/store/ent/accountbalance"
 	"deposit-crediting/internal/store/ent/assetconfig"
+	"deposit-crediting/internal/store/ent/canonicalblock"
+	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
@@ -30,6 +32,8 @@ const (
 	// Node types.
 	TypeAccountBalance = "AccountBalance"
 	TypeAssetConfig    = "AssetConfig"
+	TypeCanonicalBlock = "CanonicalBlock"
+	TypeChainCursor    = "ChainCursor"
 	TypeDeposit        = "Deposit"
 	TypeDepositAddress = "DepositAddress"
 	TypeLedgerEntry    = "LedgerEntry"
@@ -1452,31 +1456,973 @@ func (m *AssetConfigMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown AssetConfig edge %s", name)
 }
 
+// CanonicalBlockMutation represents an operation that mutates the CanonicalBlock nodes in the graph.
+type CanonicalBlockMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	chain         *string
+	height        *int64
+	addheight     *int64
+	hash          *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*CanonicalBlock, error)
+	predicates    []predicate.CanonicalBlock
+}
+
+var _ ent.Mutation = (*CanonicalBlockMutation)(nil)
+
+// canonicalblockOption allows management of the mutation configuration using functional options.
+type canonicalblockOption func(*CanonicalBlockMutation)
+
+// newCanonicalBlockMutation creates new mutation for the CanonicalBlock entity.
+func newCanonicalBlockMutation(c config, op Op, opts ...canonicalblockOption) *CanonicalBlockMutation {
+	m := &CanonicalBlockMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCanonicalBlock,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCanonicalBlockID sets the ID field of the mutation.
+func withCanonicalBlockID(id int) canonicalblockOption {
+	return func(m *CanonicalBlockMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CanonicalBlock
+		)
+		m.oldValue = func(ctx context.Context) (*CanonicalBlock, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CanonicalBlock.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCanonicalBlock sets the old CanonicalBlock of the mutation.
+func withCanonicalBlock(node *CanonicalBlock) canonicalblockOption {
+	return func(m *CanonicalBlockMutation) {
+		m.oldValue = func(context.Context) (*CanonicalBlock, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CanonicalBlockMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CanonicalBlockMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CanonicalBlockMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CanonicalBlockMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CanonicalBlock.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetChain sets the "chain" field.
+func (m *CanonicalBlockMutation) SetChain(s string) {
+	m.chain = &s
+}
+
+// Chain returns the value of the "chain" field in the mutation.
+func (m *CanonicalBlockMutation) Chain() (r string, exists bool) {
+	v := m.chain
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChain returns the old "chain" field's value of the CanonicalBlock entity.
+// If the CanonicalBlock object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CanonicalBlockMutation) OldChain(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChain is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChain requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChain: %w", err)
+	}
+	return oldValue.Chain, nil
+}
+
+// ResetChain resets all changes to the "chain" field.
+func (m *CanonicalBlockMutation) ResetChain() {
+	m.chain = nil
+}
+
+// SetHeight sets the "height" field.
+func (m *CanonicalBlockMutation) SetHeight(i int64) {
+	m.height = &i
+	m.addheight = nil
+}
+
+// Height returns the value of the "height" field in the mutation.
+func (m *CanonicalBlockMutation) Height() (r int64, exists bool) {
+	v := m.height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeight returns the old "height" field's value of the CanonicalBlock entity.
+// If the CanonicalBlock object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CanonicalBlockMutation) OldHeight(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeight: %w", err)
+	}
+	return oldValue.Height, nil
+}
+
+// AddHeight adds i to the "height" field.
+func (m *CanonicalBlockMutation) AddHeight(i int64) {
+	if m.addheight != nil {
+		*m.addheight += i
+	} else {
+		m.addheight = &i
+	}
+}
+
+// AddedHeight returns the value that was added to the "height" field in this mutation.
+func (m *CanonicalBlockMutation) AddedHeight() (r int64, exists bool) {
+	v := m.addheight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHeight resets all changes to the "height" field.
+func (m *CanonicalBlockMutation) ResetHeight() {
+	m.height = nil
+	m.addheight = nil
+}
+
+// SetHash sets the "hash" field.
+func (m *CanonicalBlockMutation) SetHash(s string) {
+	m.hash = &s
+}
+
+// Hash returns the value of the "hash" field in the mutation.
+func (m *CanonicalBlockMutation) Hash() (r string, exists bool) {
+	v := m.hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHash returns the old "hash" field's value of the CanonicalBlock entity.
+// If the CanonicalBlock object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CanonicalBlockMutation) OldHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHash: %w", err)
+	}
+	return oldValue.Hash, nil
+}
+
+// ResetHash resets all changes to the "hash" field.
+func (m *CanonicalBlockMutation) ResetHash() {
+	m.hash = nil
+}
+
+// Where appends a list predicates to the CanonicalBlockMutation builder.
+func (m *CanonicalBlockMutation) Where(ps ...predicate.CanonicalBlock) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CanonicalBlockMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CanonicalBlockMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CanonicalBlock, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CanonicalBlockMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CanonicalBlockMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CanonicalBlock).
+func (m *CanonicalBlockMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CanonicalBlockMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.chain != nil {
+		fields = append(fields, canonicalblock.FieldChain)
+	}
+	if m.height != nil {
+		fields = append(fields, canonicalblock.FieldHeight)
+	}
+	if m.hash != nil {
+		fields = append(fields, canonicalblock.FieldHash)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CanonicalBlockMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case canonicalblock.FieldChain:
+		return m.Chain()
+	case canonicalblock.FieldHeight:
+		return m.Height()
+	case canonicalblock.FieldHash:
+		return m.Hash()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CanonicalBlockMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case canonicalblock.FieldChain:
+		return m.OldChain(ctx)
+	case canonicalblock.FieldHeight:
+		return m.OldHeight(ctx)
+	case canonicalblock.FieldHash:
+		return m.OldHash(ctx)
+	}
+	return nil, fmt.Errorf("unknown CanonicalBlock field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CanonicalBlockMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case canonicalblock.FieldChain:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChain(v)
+		return nil
+	case canonicalblock.FieldHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeight(v)
+		return nil
+	case canonicalblock.FieldHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHash(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CanonicalBlock field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CanonicalBlockMutation) AddedFields() []string {
+	var fields []string
+	if m.addheight != nil {
+		fields = append(fields, canonicalblock.FieldHeight)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CanonicalBlockMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case canonicalblock.FieldHeight:
+		return m.AddedHeight()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CanonicalBlockMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case canonicalblock.FieldHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHeight(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CanonicalBlock numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CanonicalBlockMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CanonicalBlockMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CanonicalBlockMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CanonicalBlock nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CanonicalBlockMutation) ResetField(name string) error {
+	switch name {
+	case canonicalblock.FieldChain:
+		m.ResetChain()
+		return nil
+	case canonicalblock.FieldHeight:
+		m.ResetHeight()
+		return nil
+	case canonicalblock.FieldHash:
+		m.ResetHash()
+		return nil
+	}
+	return fmt.Errorf("unknown CanonicalBlock field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CanonicalBlockMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CanonicalBlockMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CanonicalBlockMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CanonicalBlockMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CanonicalBlockMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CanonicalBlockMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CanonicalBlockMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CanonicalBlock unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CanonicalBlockMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CanonicalBlock edge %s", name)
+}
+
+// ChainCursorMutation represents an operation that mutates the ChainCursor nodes in the graph.
+type ChainCursorMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	chain         *string
+	height        *int64
+	addheight     *int64
+	hash          *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*ChainCursor, error)
+	predicates    []predicate.ChainCursor
+}
+
+var _ ent.Mutation = (*ChainCursorMutation)(nil)
+
+// chaincursorOption allows management of the mutation configuration using functional options.
+type chaincursorOption func(*ChainCursorMutation)
+
+// newChainCursorMutation creates new mutation for the ChainCursor entity.
+func newChainCursorMutation(c config, op Op, opts ...chaincursorOption) *ChainCursorMutation {
+	m := &ChainCursorMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeChainCursor,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withChainCursorID sets the ID field of the mutation.
+func withChainCursorID(id int) chaincursorOption {
+	return func(m *ChainCursorMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ChainCursor
+		)
+		m.oldValue = func(ctx context.Context) (*ChainCursor, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ChainCursor.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withChainCursor sets the old ChainCursor of the mutation.
+func withChainCursor(node *ChainCursor) chaincursorOption {
+	return func(m *ChainCursorMutation) {
+		m.oldValue = func(context.Context) (*ChainCursor, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ChainCursorMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ChainCursorMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ChainCursorMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ChainCursorMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ChainCursor.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetChain sets the "chain" field.
+func (m *ChainCursorMutation) SetChain(s string) {
+	m.chain = &s
+}
+
+// Chain returns the value of the "chain" field in the mutation.
+func (m *ChainCursorMutation) Chain() (r string, exists bool) {
+	v := m.chain
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChain returns the old "chain" field's value of the ChainCursor entity.
+// If the ChainCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChainCursorMutation) OldChain(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChain is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChain requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChain: %w", err)
+	}
+	return oldValue.Chain, nil
+}
+
+// ResetChain resets all changes to the "chain" field.
+func (m *ChainCursorMutation) ResetChain() {
+	m.chain = nil
+}
+
+// SetHeight sets the "height" field.
+func (m *ChainCursorMutation) SetHeight(i int64) {
+	m.height = &i
+	m.addheight = nil
+}
+
+// Height returns the value of the "height" field in the mutation.
+func (m *ChainCursorMutation) Height() (r int64, exists bool) {
+	v := m.height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeight returns the old "height" field's value of the ChainCursor entity.
+// If the ChainCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChainCursorMutation) OldHeight(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeight: %w", err)
+	}
+	return oldValue.Height, nil
+}
+
+// AddHeight adds i to the "height" field.
+func (m *ChainCursorMutation) AddHeight(i int64) {
+	if m.addheight != nil {
+		*m.addheight += i
+	} else {
+		m.addheight = &i
+	}
+}
+
+// AddedHeight returns the value that was added to the "height" field in this mutation.
+func (m *ChainCursorMutation) AddedHeight() (r int64, exists bool) {
+	v := m.addheight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHeight resets all changes to the "height" field.
+func (m *ChainCursorMutation) ResetHeight() {
+	m.height = nil
+	m.addheight = nil
+}
+
+// SetHash sets the "hash" field.
+func (m *ChainCursorMutation) SetHash(s string) {
+	m.hash = &s
+}
+
+// Hash returns the value of the "hash" field in the mutation.
+func (m *ChainCursorMutation) Hash() (r string, exists bool) {
+	v := m.hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHash returns the old "hash" field's value of the ChainCursor entity.
+// If the ChainCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChainCursorMutation) OldHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHash: %w", err)
+	}
+	return oldValue.Hash, nil
+}
+
+// ResetHash resets all changes to the "hash" field.
+func (m *ChainCursorMutation) ResetHash() {
+	m.hash = nil
+}
+
+// Where appends a list predicates to the ChainCursorMutation builder.
+func (m *ChainCursorMutation) Where(ps ...predicate.ChainCursor) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ChainCursorMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ChainCursorMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ChainCursor, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ChainCursorMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ChainCursorMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ChainCursor).
+func (m *ChainCursorMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ChainCursorMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.chain != nil {
+		fields = append(fields, chaincursor.FieldChain)
+	}
+	if m.height != nil {
+		fields = append(fields, chaincursor.FieldHeight)
+	}
+	if m.hash != nil {
+		fields = append(fields, chaincursor.FieldHash)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ChainCursorMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case chaincursor.FieldChain:
+		return m.Chain()
+	case chaincursor.FieldHeight:
+		return m.Height()
+	case chaincursor.FieldHash:
+		return m.Hash()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ChainCursorMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case chaincursor.FieldChain:
+		return m.OldChain(ctx)
+	case chaincursor.FieldHeight:
+		return m.OldHeight(ctx)
+	case chaincursor.FieldHash:
+		return m.OldHash(ctx)
+	}
+	return nil, fmt.Errorf("unknown ChainCursor field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ChainCursorMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case chaincursor.FieldChain:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChain(v)
+		return nil
+	case chaincursor.FieldHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeight(v)
+		return nil
+	case chaincursor.FieldHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHash(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ChainCursor field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ChainCursorMutation) AddedFields() []string {
+	var fields []string
+	if m.addheight != nil {
+		fields = append(fields, chaincursor.FieldHeight)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ChainCursorMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case chaincursor.FieldHeight:
+		return m.AddedHeight()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ChainCursorMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case chaincursor.FieldHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHeight(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ChainCursor numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ChainCursorMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ChainCursorMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ChainCursorMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ChainCursor nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ChainCursorMutation) ResetField(name string) error {
+	switch name {
+	case chaincursor.FieldChain:
+		m.ResetChain()
+		return nil
+	case chaincursor.FieldHeight:
+		m.ResetHeight()
+		return nil
+	case chaincursor.FieldHash:
+		m.ResetHash()
+		return nil
+	}
+	return fmt.Errorf("unknown ChainCursor field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ChainCursorMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ChainCursorMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ChainCursorMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ChainCursorMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ChainCursorMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ChainCursorMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ChainCursorMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ChainCursor unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ChainCursorMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ChainCursor edge %s", name)
+}
+
 // DepositMutation represents an operation that mutates the Deposit nodes in the graph.
 type DepositMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int
-	transfer_id     *string
-	chain           *string
-	asset           *string
-	account         *string
-	address         *string
-	amount          *string
-	mode            *deposit.Mode
-	state           *deposit.State
-	credit_cycle    *int
-	addcredit_cycle *int
-	block_height    *int64
-	addblock_height *int64
-	block_hash      *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*Deposit, error)
-	predicates      []predicate.Deposit
+	op                Op
+	typ               string
+	id                *int
+	transfer_id       *string
+	chain             *string
+	asset             *string
+	account           *string
+	address           *string
+	amount            *string
+	mode              *deposit.Mode
+	state             *deposit.State
+	credit_cycle      *int
+	addcredit_cycle   *int
+	block_height      *int64
+	addblock_height   *int64
+	block_hash        *string
+	reorged_height    *int64
+	addreorged_height *int64
+	created_at        *time.Time
+	updated_at        *time.Time
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*Deposit, error)
+	predicates        []predicate.Deposit
 }
 
 var _ ent.Mutation = (*DepositMutation)(nil)
@@ -2040,6 +2986,76 @@ func (m *DepositMutation) ResetBlockHash() {
 	delete(m.clearedFields, deposit.FieldBlockHash)
 }
 
+// SetReorgedHeight sets the "reorged_height" field.
+func (m *DepositMutation) SetReorgedHeight(i int64) {
+	m.reorged_height = &i
+	m.addreorged_height = nil
+}
+
+// ReorgedHeight returns the value of the "reorged_height" field in the mutation.
+func (m *DepositMutation) ReorgedHeight() (r int64, exists bool) {
+	v := m.reorged_height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReorgedHeight returns the old "reorged_height" field's value of the Deposit entity.
+// If the Deposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DepositMutation) OldReorgedHeight(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReorgedHeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReorgedHeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReorgedHeight: %w", err)
+	}
+	return oldValue.ReorgedHeight, nil
+}
+
+// AddReorgedHeight adds i to the "reorged_height" field.
+func (m *DepositMutation) AddReorgedHeight(i int64) {
+	if m.addreorged_height != nil {
+		*m.addreorged_height += i
+	} else {
+		m.addreorged_height = &i
+	}
+}
+
+// AddedReorgedHeight returns the value that was added to the "reorged_height" field in this mutation.
+func (m *DepositMutation) AddedReorgedHeight() (r int64, exists bool) {
+	v := m.addreorged_height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearReorgedHeight clears the value of the "reorged_height" field.
+func (m *DepositMutation) ClearReorgedHeight() {
+	m.reorged_height = nil
+	m.addreorged_height = nil
+	m.clearedFields[deposit.FieldReorgedHeight] = struct{}{}
+}
+
+// ReorgedHeightCleared returns if the "reorged_height" field was cleared in this mutation.
+func (m *DepositMutation) ReorgedHeightCleared() bool {
+	_, ok := m.clearedFields[deposit.FieldReorgedHeight]
+	return ok
+}
+
+// ResetReorgedHeight resets all changes to the "reorged_height" field.
+func (m *DepositMutation) ResetReorgedHeight() {
+	m.reorged_height = nil
+	m.addreorged_height = nil
+	delete(m.clearedFields, deposit.FieldReorgedHeight)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *DepositMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2146,7 +3162,7 @@ func (m *DepositMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DepositMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.transfer_id != nil {
 		fields = append(fields, deposit.FieldTransferID)
 	}
@@ -2179,6 +3195,9 @@ func (m *DepositMutation) Fields() []string {
 	}
 	if m.block_hash != nil {
 		fields = append(fields, deposit.FieldBlockHash)
+	}
+	if m.reorged_height != nil {
+		fields = append(fields, deposit.FieldReorgedHeight)
 	}
 	if m.created_at != nil {
 		fields = append(fields, deposit.FieldCreatedAt)
@@ -2216,6 +3235,8 @@ func (m *DepositMutation) Field(name string) (ent.Value, bool) {
 		return m.BlockHeight()
 	case deposit.FieldBlockHash:
 		return m.BlockHash()
+	case deposit.FieldReorgedHeight:
+		return m.ReorgedHeight()
 	case deposit.FieldCreatedAt:
 		return m.CreatedAt()
 	case deposit.FieldUpdatedAt:
@@ -2251,6 +3272,8 @@ func (m *DepositMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldBlockHeight(ctx)
 	case deposit.FieldBlockHash:
 		return m.OldBlockHash(ctx)
+	case deposit.FieldReorgedHeight:
+		return m.OldReorgedHeight(ctx)
 	case deposit.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case deposit.FieldUpdatedAt:
@@ -2341,6 +3364,13 @@ func (m *DepositMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBlockHash(v)
 		return nil
+	case deposit.FieldReorgedHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReorgedHeight(v)
+		return nil
 	case deposit.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -2369,6 +3399,9 @@ func (m *DepositMutation) AddedFields() []string {
 	if m.addblock_height != nil {
 		fields = append(fields, deposit.FieldBlockHeight)
 	}
+	if m.addreorged_height != nil {
+		fields = append(fields, deposit.FieldReorgedHeight)
+	}
 	return fields
 }
 
@@ -2381,6 +3414,8 @@ func (m *DepositMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCreditCycle()
 	case deposit.FieldBlockHeight:
 		return m.AddedBlockHeight()
+	case deposit.FieldReorgedHeight:
+		return m.AddedReorgedHeight()
 	}
 	return nil, false
 }
@@ -2404,6 +3439,13 @@ func (m *DepositMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddBlockHeight(v)
 		return nil
+	case deposit.FieldReorgedHeight:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReorgedHeight(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Deposit numeric field %s", name)
 }
@@ -2417,6 +3459,9 @@ func (m *DepositMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(deposit.FieldBlockHash) {
 		fields = append(fields, deposit.FieldBlockHash)
+	}
+	if m.FieldCleared(deposit.FieldReorgedHeight) {
+		fields = append(fields, deposit.FieldReorgedHeight)
 	}
 	return fields
 }
@@ -2437,6 +3482,9 @@ func (m *DepositMutation) ClearField(name string) error {
 		return nil
 	case deposit.FieldBlockHash:
 		m.ClearBlockHash()
+		return nil
+	case deposit.FieldReorgedHeight:
+		m.ClearReorgedHeight()
 		return nil
 	}
 	return fmt.Errorf("unknown Deposit nullable field %s", name)
@@ -2478,6 +3526,9 @@ func (m *DepositMutation) ResetField(name string) error {
 		return nil
 	case deposit.FieldBlockHash:
 		m.ResetBlockHash()
+		return nil
+	case deposit.FieldReorgedHeight:
+		m.ResetReorgedHeight()
 		return nil
 	case deposit.FieldCreatedAt:
 		m.ResetCreatedAt()

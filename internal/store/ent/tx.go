@@ -16,6 +16,10 @@ type Tx struct {
 	AccountBalance *AccountBalanceClient
 	// AssetConfig is the client for interacting with the AssetConfig builders.
 	AssetConfig *AssetConfigClient
+	// CanonicalBlock is the client for interacting with the CanonicalBlock builders.
+	CanonicalBlock *CanonicalBlockClient
+	// ChainCursor is the client for interacting with the ChainCursor builders.
+	ChainCursor *ChainCursorClient
 	// Deposit is the client for interacting with the Deposit builders.
 	Deposit *DepositClient
 	// DepositAddress is the client for interacting with the DepositAddress builders.
@@ -155,6 +159,8 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AccountBalance = NewAccountBalanceClient(tx.config)
 	tx.AssetConfig = NewAssetConfigClient(tx.config)
+	tx.CanonicalBlock = NewCanonicalBlockClient(tx.config)
+	tx.ChainCursor = NewChainCursorClient(tx.config)
 	tx.Deposit = NewDepositClient(tx.config)
 	tx.DepositAddress = NewDepositAddressClient(tx.config)
 	tx.LedgerEntry = NewLedgerEntryClient(tx.config)

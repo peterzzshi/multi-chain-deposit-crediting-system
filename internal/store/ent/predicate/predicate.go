@@ -12,6 +12,12 @@ type AccountBalance func(*sql.Selector)
 // AssetConfig is the predicate function for assetconfig builders.
 type AssetConfig func(*sql.Selector)
 
+// CanonicalBlock is the predicate function for canonicalblock builders.
+type CanonicalBlock func(*sql.Selector)
+
+// ChainCursor is the predicate function for chaincursor builders.
+type ChainCursor func(*sql.Selector)
+
 // Deposit is the predicate function for deposit builders.
 type Deposit func(*sql.Selector)
 

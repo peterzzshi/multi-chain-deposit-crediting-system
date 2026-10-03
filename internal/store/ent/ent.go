@@ -6,6 +6,8 @@ import (
 	"context"
 	"deposit-crediting/internal/store/ent/accountbalance"
 	"deposit-crediting/internal/store/ent/assetconfig"
+	"deposit-crediting/internal/store/ent/canonicalblock"
+	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
@@ -79,6 +81,8 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			accountbalance.Table: accountbalance.ValidColumn,
 			assetconfig.Table:    assetconfig.ValidColumn,
+			canonicalblock.Table: canonicalblock.ValidColumn,
+			chaincursor.Table:    chaincursor.ValidColumn,
 			deposit.Table:        deposit.ValidColumn,
 			depositaddress.Table: depositaddress.ValidColumn,
 			ledgerentry.Table:    ledgerentry.ValidColumn,

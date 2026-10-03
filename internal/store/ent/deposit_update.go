@@ -194,6 +194,33 @@ func (_u *DepositUpdate) ClearBlockHash() *DepositUpdate {
 	return _u
 }
 
+// SetReorgedHeight sets the "reorged_height" field.
+func (_u *DepositUpdate) SetReorgedHeight(v int64) *DepositUpdate {
+	_u.mutation.ResetReorgedHeight()
+	_u.mutation.SetReorgedHeight(v)
+	return _u
+}
+
+// SetNillableReorgedHeight sets the "reorged_height" field if the given value is not nil.
+func (_u *DepositUpdate) SetNillableReorgedHeight(v *int64) *DepositUpdate {
+	if v != nil {
+		_u.SetReorgedHeight(*v)
+	}
+	return _u
+}
+
+// AddReorgedHeight adds value to the "reorged_height" field.
+func (_u *DepositUpdate) AddReorgedHeight(v int64) *DepositUpdate {
+	_u.mutation.AddReorgedHeight(v)
+	return _u
+}
+
+// ClearReorgedHeight clears the value of the "reorged_height" field.
+func (_u *DepositUpdate) ClearReorgedHeight() *DepositUpdate {
+	_u.mutation.ClearReorgedHeight()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdate) SetUpdatedAt(v time.Time) *DepositUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -329,6 +356,15 @@ func (_u *DepositUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BlockHashCleared() {
 		_spec.ClearField(deposit.FieldBlockHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReorgedHeight(); ok {
+		_spec.SetField(deposit.FieldReorgedHeight, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedReorgedHeight(); ok {
+		_spec.AddField(deposit.FieldReorgedHeight, field.TypeInt64, value)
+	}
+	if _u.mutation.ReorgedHeightCleared() {
+		_spec.ClearField(deposit.FieldReorgedHeight, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)
@@ -519,6 +555,33 @@ func (_u *DepositUpdateOne) ClearBlockHash() *DepositUpdateOne {
 	return _u
 }
 
+// SetReorgedHeight sets the "reorged_height" field.
+func (_u *DepositUpdateOne) SetReorgedHeight(v int64) *DepositUpdateOne {
+	_u.mutation.ResetReorgedHeight()
+	_u.mutation.SetReorgedHeight(v)
+	return _u
+}
+
+// SetNillableReorgedHeight sets the "reorged_height" field if the given value is not nil.
+func (_u *DepositUpdateOne) SetNillableReorgedHeight(v *int64) *DepositUpdateOne {
+	if v != nil {
+		_u.SetReorgedHeight(*v)
+	}
+	return _u
+}
+
+// AddReorgedHeight adds value to the "reorged_height" field.
+func (_u *DepositUpdateOne) AddReorgedHeight(v int64) *DepositUpdateOne {
+	_u.mutation.AddReorgedHeight(v)
+	return _u
+}
+
+// ClearReorgedHeight clears the value of the "reorged_height" field.
+func (_u *DepositUpdateOne) ClearReorgedHeight() *DepositUpdateOne {
+	_u.mutation.ClearReorgedHeight()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *DepositUpdateOne) SetUpdatedAt(v time.Time) *DepositUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -684,6 +747,15 @@ func (_u *DepositUpdateOne) sqlSave(ctx context.Context) (_node *Deposit, err er
 	}
 	if _u.mutation.BlockHashCleared() {
 		_spec.ClearField(deposit.FieldBlockHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReorgedHeight(); ok {
+		_spec.SetField(deposit.FieldReorgedHeight, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedReorgedHeight(); ok {
+		_spec.AddField(deposit.FieldReorgedHeight, field.TypeInt64, value)
+	}
+	if _u.mutation.ReorgedHeightCleared() {
+		_spec.ClearField(deposit.FieldReorgedHeight, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(deposit.FieldUpdatedAt, field.TypeTime, value)

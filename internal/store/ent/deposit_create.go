@@ -118,6 +118,20 @@ func (_c *DepositCreate) SetNillableBlockHash(v *string) *DepositCreate {
 	return _c
 }
 
+// SetReorgedHeight sets the "reorged_height" field.
+func (_c *DepositCreate) SetReorgedHeight(v int64) *DepositCreate {
+	_c.mutation.SetReorgedHeight(v)
+	return _c
+}
+
+// SetNillableReorgedHeight sets the "reorged_height" field if the given value is not nil.
+func (_c *DepositCreate) SetNillableReorgedHeight(v *int64) *DepositCreate {
+	if v != nil {
+		_c.SetReorgedHeight(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *DepositCreate) SetCreatedAt(v time.Time) *DepositCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -338,6 +352,10 @@ func (_c *DepositCreate) createSpec() (*Deposit, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BlockHash(); ok {
 		_spec.SetField(deposit.FieldBlockHash, field.TypeString, value)
 		_node.BlockHash = &value
+	}
+	if value, ok := _c.mutation.ReorgedHeight(); ok {
+		_spec.SetField(deposit.FieldReorgedHeight, field.TypeInt64, value)
+		_node.ReorgedHeight = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(deposit.FieldCreatedAt, field.TypeTime, value)

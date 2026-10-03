@@ -13,6 +13,8 @@ import (
 
 	"deposit-crediting/internal/store/ent/accountbalance"
 	"deposit-crediting/internal/store/ent/assetconfig"
+	"deposit-crediting/internal/store/ent/canonicalblock"
+	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
@@ -31,6 +33,10 @@ type Client struct {
 	AccountBalance *AccountBalanceClient
 	// AssetConfig is the client for interacting with the AssetConfig builders.
 	AssetConfig *AssetConfigClient
+	// CanonicalBlock is the client for interacting with the CanonicalBlock builders.
+	CanonicalBlock *CanonicalBlockClient
+	// ChainCursor is the client for interacting with the ChainCursor builders.
+	ChainCursor *ChainCursorClient
 	// Deposit is the client for interacting with the Deposit builders.
 	Deposit *DepositClient
 	// DepositAddress is the client for interacting with the DepositAddress builders.
@@ -50,6 +56,8 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AccountBalance = NewAccountBalanceClient(c.config)
 	c.AssetConfig = NewAssetConfigClient(c.config)
+	c.CanonicalBlock = NewCanonicalBlockClient(c.config)
+	c.ChainCursor = NewChainCursorClient(c.config)
 	c.Deposit = NewDepositClient(c.config)
 	c.DepositAddress = NewDepositAddressClient(c.config)
 	c.LedgerEntry = NewLedgerEntryClient(c.config)
@@ -147,6 +155,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:         cfg,
 		AccountBalance: NewAccountBalanceClient(cfg),
 		AssetConfig:    NewAssetConfigClient(cfg),
+		CanonicalBlock: NewCanonicalBlockClient(cfg),
+		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
@@ -171,6 +181,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:         cfg,
 		AccountBalance: NewAccountBalanceClient(cfg),
 		AssetConfig:    NewAssetConfigClient(cfg),
+		CanonicalBlock: NewCanonicalBlockClient(cfg),
+		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
 		DepositAddress: NewDepositAddressClient(cfg),
 		LedgerEntry:    NewLedgerEntryClient(cfg),
@@ -202,21 +214,23 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.AccountBalance.Use(hooks...)
-	c.AssetConfig.Use(hooks...)
-	c.Deposit.Use(hooks...)
-	c.DepositAddress.Use(hooks...)
-	c.LedgerEntry.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
+		c.DepositAddress, c.LedgerEntry,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.AccountBalance.Intercept(interceptors...)
-	c.AssetConfig.Intercept(interceptors...)
-	c.Deposit.Intercept(interceptors...)
-	c.DepositAddress.Intercept(interceptors...)
-	c.LedgerEntry.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
+		c.DepositAddress, c.LedgerEntry,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -226,6 +240,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AccountBalance.mutate(ctx, m)
 	case *AssetConfigMutation:
 		return c.AssetConfig.mutate(ctx, m)
+	case *CanonicalBlockMutation:
+		return c.CanonicalBlock.mutate(ctx, m)
+	case *ChainCursorMutation:
+		return c.ChainCursor.mutate(ctx, m)
 	case *DepositMutation:
 		return c.Deposit.mutate(ctx, m)
 	case *DepositAddressMutation:
@@ -500,6 +518,272 @@ func (c *AssetConfigClient) mutate(ctx context.Context, m *AssetConfigMutation) 
 		return (&AssetConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AssetConfig mutation op: %q", m.Op())
+	}
+}
+
+// CanonicalBlockClient is a client for the CanonicalBlock schema.
+type CanonicalBlockClient struct {
+	config
+}
+
+// NewCanonicalBlockClient returns a client for the CanonicalBlock from the given config.
+func NewCanonicalBlockClient(c config) *CanonicalBlockClient {
+	return &CanonicalBlockClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `canonicalblock.Hooks(f(g(h())))`.
+func (c *CanonicalBlockClient) Use(hooks ...Hook) {
+	c.hooks.CanonicalBlock = append(c.hooks.CanonicalBlock, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `canonicalblock.Intercept(f(g(h())))`.
+func (c *CanonicalBlockClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CanonicalBlock = append(c.inters.CanonicalBlock, interceptors...)
+}
+
+// Create returns a builder for creating a CanonicalBlock entity.
+func (c *CanonicalBlockClient) Create() *CanonicalBlockCreate {
+	mutation := newCanonicalBlockMutation(c.config, OpCreate)
+	return &CanonicalBlockCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CanonicalBlock entities.
+func (c *CanonicalBlockClient) CreateBulk(builders ...*CanonicalBlockCreate) *CanonicalBlockCreateBulk {
+	return &CanonicalBlockCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CanonicalBlockClient) MapCreateBulk(slice any, setFunc func(*CanonicalBlockCreate, int)) *CanonicalBlockCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CanonicalBlockCreateBulk{err: fmt.Errorf("calling to CanonicalBlockClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CanonicalBlockCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CanonicalBlockCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CanonicalBlock.
+func (c *CanonicalBlockClient) Update() *CanonicalBlockUpdate {
+	mutation := newCanonicalBlockMutation(c.config, OpUpdate)
+	return &CanonicalBlockUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CanonicalBlockClient) UpdateOne(_m *CanonicalBlock) *CanonicalBlockUpdateOne {
+	mutation := newCanonicalBlockMutation(c.config, OpUpdateOne, withCanonicalBlock(_m))
+	return &CanonicalBlockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CanonicalBlockClient) UpdateOneID(id int) *CanonicalBlockUpdateOne {
+	mutation := newCanonicalBlockMutation(c.config, OpUpdateOne, withCanonicalBlockID(id))
+	return &CanonicalBlockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CanonicalBlock.
+func (c *CanonicalBlockClient) Delete() *CanonicalBlockDelete {
+	mutation := newCanonicalBlockMutation(c.config, OpDelete)
+	return &CanonicalBlockDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CanonicalBlockClient) DeleteOne(_m *CanonicalBlock) *CanonicalBlockDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CanonicalBlockClient) DeleteOneID(id int) *CanonicalBlockDeleteOne {
+	builder := c.Delete().Where(canonicalblock.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CanonicalBlockDeleteOne{builder}
+}
+
+// Query returns a query builder for CanonicalBlock.
+func (c *CanonicalBlockClient) Query() *CanonicalBlockQuery {
+	return &CanonicalBlockQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCanonicalBlock},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CanonicalBlock entity by its id.
+func (c *CanonicalBlockClient) Get(ctx context.Context, id int) (*CanonicalBlock, error) {
+	return c.Query().Where(canonicalblock.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CanonicalBlockClient) GetX(ctx context.Context, id int) *CanonicalBlock {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CanonicalBlockClient) Hooks() []Hook {
+	return c.hooks.CanonicalBlock
+}
+
+// Interceptors returns the client interceptors.
+func (c *CanonicalBlockClient) Interceptors() []Interceptor {
+	return c.inters.CanonicalBlock
+}
+
+func (c *CanonicalBlockClient) mutate(ctx context.Context, m *CanonicalBlockMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CanonicalBlockCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CanonicalBlockUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CanonicalBlockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CanonicalBlockDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CanonicalBlock mutation op: %q", m.Op())
+	}
+}
+
+// ChainCursorClient is a client for the ChainCursor schema.
+type ChainCursorClient struct {
+	config
+}
+
+// NewChainCursorClient returns a client for the ChainCursor from the given config.
+func NewChainCursorClient(c config) *ChainCursorClient {
+	return &ChainCursorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `chaincursor.Hooks(f(g(h())))`.
+func (c *ChainCursorClient) Use(hooks ...Hook) {
+	c.hooks.ChainCursor = append(c.hooks.ChainCursor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `chaincursor.Intercept(f(g(h())))`.
+func (c *ChainCursorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ChainCursor = append(c.inters.ChainCursor, interceptors...)
+}
+
+// Create returns a builder for creating a ChainCursor entity.
+func (c *ChainCursorClient) Create() *ChainCursorCreate {
+	mutation := newChainCursorMutation(c.config, OpCreate)
+	return &ChainCursorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ChainCursor entities.
+func (c *ChainCursorClient) CreateBulk(builders ...*ChainCursorCreate) *ChainCursorCreateBulk {
+	return &ChainCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ChainCursorClient) MapCreateBulk(slice any, setFunc func(*ChainCursorCreate, int)) *ChainCursorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ChainCursorCreateBulk{err: fmt.Errorf("calling to ChainCursorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ChainCursorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ChainCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ChainCursor.
+func (c *ChainCursorClient) Update() *ChainCursorUpdate {
+	mutation := newChainCursorMutation(c.config, OpUpdate)
+	return &ChainCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ChainCursorClient) UpdateOne(_m *ChainCursor) *ChainCursorUpdateOne {
+	mutation := newChainCursorMutation(c.config, OpUpdateOne, withChainCursor(_m))
+	return &ChainCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ChainCursorClient) UpdateOneID(id int) *ChainCursorUpdateOne {
+	mutation := newChainCursorMutation(c.config, OpUpdateOne, withChainCursorID(id))
+	return &ChainCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ChainCursor.
+func (c *ChainCursorClient) Delete() *ChainCursorDelete {
+	mutation := newChainCursorMutation(c.config, OpDelete)
+	return &ChainCursorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ChainCursorClient) DeleteOne(_m *ChainCursor) *ChainCursorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ChainCursorClient) DeleteOneID(id int) *ChainCursorDeleteOne {
+	builder := c.Delete().Where(chaincursor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ChainCursorDeleteOne{builder}
+}
+
+// Query returns a query builder for ChainCursor.
+func (c *ChainCursorClient) Query() *ChainCursorQuery {
+	return &ChainCursorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeChainCursor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ChainCursor entity by its id.
+func (c *ChainCursorClient) Get(ctx context.Context, id int) (*ChainCursor, error) {
+	return c.Query().Where(chaincursor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ChainCursorClient) GetX(ctx context.Context, id int) *ChainCursor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ChainCursorClient) Hooks() []Hook {
+	return c.hooks.ChainCursor
+}
+
+// Interceptors returns the client interceptors.
+func (c *ChainCursorClient) Interceptors() []Interceptor {
+	return c.inters.ChainCursor
+}
+
+func (c *ChainCursorClient) mutate(ctx context.Context, m *ChainCursorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ChainCursorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ChainCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ChainCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ChainCursorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ChainCursor mutation op: %q", m.Op())
 	}
 }
 
@@ -905,10 +1189,11 @@ func (c *LedgerEntryClient) mutate(ctx context.Context, m *LedgerEntryMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AccountBalance, AssetConfig, Deposit, DepositAddress, LedgerEntry []ent.Hook
+		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
+		DepositAddress, LedgerEntry []ent.Hook
 	}
 	inters struct {
-		AccountBalance, AssetConfig, Deposit, DepositAddress,
-		LedgerEntry []ent.Interceptor
+		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
+		DepositAddress, LedgerEntry []ent.Interceptor
 	}
 )

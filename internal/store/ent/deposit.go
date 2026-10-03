@@ -39,6 +39,8 @@ type Deposit struct {
 	BlockHeight *int64 `json:"block_height,omitempty"`
 	// BlockHash holds the value of the "block_hash" field.
 	BlockHash *string `json:"block_hash,omitempty"`
+	// ReorgedHeight holds the value of the "reorged_height" field.
+	ReorgedHeight *int64 `json:"reorged_height,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -51,7 +53,7 @@ func (*Deposit) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case deposit.FieldID, deposit.FieldCreditCycle, deposit.FieldBlockHeight:
+		case deposit.FieldID, deposit.FieldCreditCycle, deposit.FieldBlockHeight, deposit.FieldReorgedHeight:
 			values[i] = new(sql.NullInt64)
 		case deposit.FieldTransferID, deposit.FieldChain, deposit.FieldAsset, deposit.FieldAccount, deposit.FieldAddress, deposit.FieldAmount, deposit.FieldMode, deposit.FieldState, deposit.FieldBlockHash:
 			values[i] = new(sql.NullString)
@@ -146,6 +148,13 @@ func (_m *Deposit) assignValues(columns []string, values []any) error {
 				_m.BlockHash = new(string)
 				*_m.BlockHash = value.String
 			}
+		case deposit.FieldReorgedHeight:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field reorged_height", values[i])
+			} else if value.Valid {
+				_m.ReorgedHeight = new(int64)
+				*_m.ReorgedHeight = value.Int64
+			}
 		case deposit.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -229,6 +238,11 @@ func (_m *Deposit) String() string {
 	if v := _m.BlockHash; v != nil {
 		builder.WriteString("block_hash=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ReorgedHeight; v != nil {
+		builder.WriteString("reorged_height=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")

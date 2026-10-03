@@ -1,0 +1,406 @@
+// Package scanner implements the self-built ingest path: it follows the
+// canonical chain, opens deposits for watched addresses, drives their
+// confirmation-depth transitions through the crediting engine, and
+// survives reorgs by rewinding to the fork and replaying the new branch.
+package scanner
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"math/big"
+	"time"
+
+	"deposit-crediting/internal/adapters/chain"
+	"deposit-crediting/internal/credit"
+	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain/identity"
+	"deposit-crediting/internal/errs"
+)
+
+type Config struct {
+	ChainID      string
+	StartHeight  uint64 // first block processed when no cursor exists
+	MaxBatch     uint64
+	PollInterval time.Duration
+}
+
+type Cursor struct {
+	Height uint64
+	Hash   string
+}
+
+type AssetConfig struct {
+	Asset       string
+	MinAmount   *big.Int
+	NCredit     uint64
+	NFinalize   uint64
+	ReorgWindow uint64
+}
+
+type Tracked struct {
+	TransferID string
+	Asset      string
+	State      deposit.State
+	Height     uint64
+}
+
+type Reorged struct {
+	TransferID string
+	Asset      string
+	Height     *uint64
+}
+
+type OpenParams struct {
+	TransferID string
+	State      deposit.State
+	Chain      string
+	Asset      string
+	Account    string
+	Address    string
+	Amount     *big.Int
+	Height     uint64
+	Hash       string
+}
+
+// Store is the scanner's persistence boundary; implemented by
+// internal/store. All queries are scoped to one chain and to self-built
+// mode.
+type Store interface {
+	Cursor(ctx context.Context, chainID string) (Cursor, bool, error)
+	SaveCursor(ctx context.Context, chainID string, c Cursor) error
+	RecordBlock(ctx context.Context, chainID string, height uint64, hash string) error
+	// BlockHashAt returns "" when the height is not recorded.
+	BlockHashAt(ctx context.Context, chainID string, height uint64) (string, error)
+	DropBlocksAbove(ctx context.Context, chainID string, height uint64) error
+	AssetConfigs(ctx context.Context, chainID string) ([]AssetConfig, error)
+	// ResolveRecipients maps watched addresses to their account.
+	ResolveRecipients(ctx context.Context, chainID string, addrs []string) (map[string]string, error)
+	// OpenDeposit inserts a new deposit row; false means the transfer ID
+	// already exists.
+	OpenDeposit(ctx context.Context, p OpenParams) (bool, error)
+	// ReincludeDeposit moves an existing row to its new canonical
+	// inclusion; the state transition itself goes through the engine.
+	ReincludeDeposit(ctx context.Context, transferID string, height uint64, hash string) error
+	DepositState(ctx context.Context, transferID string) (deposit.State, error)
+	TrackedDeposits(ctx context.Context, chainID string) ([]Tracked, error)
+	ReorgedDeposits(ctx context.Context, chainID string) ([]Reorged, error)
+	MarkReorged(ctx context.Context, transferID string, height uint64) error
+	HasCredit(ctx context.Context, transferID string) (bool, error)
+}
+
+type Scanner struct {
+	chain  chain.Client
+	store  Store
+	engine *credit.Engine
+	cfg    Config
+}
+
+func New(cfg Config, c chain.Client, st Store, e *credit.Engine) *Scanner {
+	return &Scanner{chain: c, store: st, engine: e, cfg: cfg}
+}
+
+// Run polls until ctx is done; tick errors are logged and retried, except
+// ErrChainInconsistent, which retry cannot fix — Run stops for operator
+// repair.
+func (s *Scanner) Run(ctx context.Context) error {
+	for {
+		if err := s.Tick(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			if errors.Is(err, errs.ErrChainInconsistent) {
+				return err
+			}
+			slog.Error("scanner tick failed", "chain", s.cfg.ChainID, "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(s.cfg.PollInterval):
+		}
+	}
+}
+
+// Tick runs one scan iteration: reorg check, forward processing, depth
+// advancement, reorg-window expiry.
+func (s *Scanner) Tick(ctx context.Context) error {
+	head, err := s.chain.Head(ctx)
+	if err != nil {
+		return fmt.Errorf("scanner: head: %w", err)
+	}
+	cursor, found, err := s.store.Cursor(ctx, s.cfg.ChainID)
+	if err != nil {
+		return fmt.Errorf("scanner: cursor: %w", err)
+	}
+	if !found {
+		start := max(s.cfg.StartHeight, 1)
+		cursor = Cursor{Height: start - 1}
+	}
+	if err := s.rewindIfReorged(ctx, &cursor, head); err != nil {
+		return err
+	}
+	limit := min(head, cursor.Height+s.cfg.MaxBatch)
+	for h := cursor.Height + 1; h <= limit; h++ {
+		if err := s.processBlock(ctx, h, &cursor); err != nil {
+			return err
+		}
+	}
+	if err := s.advanceDepth(ctx, head); err != nil {
+		return err
+	}
+	return s.expireReorged(ctx, head)
+}
+
+// rewindIfReorged compares the recorded tip against the canonical chain;
+// on mismatch it walks back to the fork, marks orphaned deposits REORGED,
+// and resets the cursor so the new branch is replayed.
+func (s *Scanner) rewindIfReorged(ctx context.Context, cursor *Cursor, head uint64) error {
+	if cursor.Hash == "" {
+		return nil
+	}
+	canonical, err := s.chain.BlockHash(ctx, cursor.Height)
+	if err == nil && canonical == cursor.Hash {
+		return nil
+	}
+	fork := cursor.Height
+	var forkHash string
+	for fork > 0 {
+		fork--
+		stored, err := s.store.BlockHashAt(ctx, s.cfg.ChainID, fork)
+		if err != nil {
+			return fmt.Errorf("scanner: recorded hash at %d: %w", fork, err)
+		}
+		canonical, err := s.chain.BlockHash(ctx, fork)
+		if err != nil {
+			continue // beyond canonical head: still orphaned
+		}
+		if stored == "" || stored == canonical {
+			forkHash = canonical
+			break
+		}
+	}
+	tracked, err := s.store.TrackedDeposits(ctx, s.cfg.ChainID)
+	if err != nil {
+		return fmt.Errorf("scanner: tracked deposits: %w", err)
+	}
+	for _, t := range tracked {
+		if t.Height <= fork || t.Height > cursor.Height {
+			continue
+		}
+		if err := s.store.MarkReorged(ctx, t.TransferID, head); err != nil {
+			return fmt.Errorf("scanner: mark reorged %s: %w", t.TransferID, err)
+		}
+		if err := s.engine.Apply(ctx, t.TransferID, deposit.EventReorgedOut); err != nil {
+			return fmt.Errorf("scanner: reorg out %s: %w", t.TransferID, err)
+		}
+	}
+	if err := s.store.DropBlocksAbove(ctx, s.cfg.ChainID, fork); err != nil {
+		return fmt.Errorf("scanner: drop blocks above %d: %w", fork, err)
+	}
+	*cursor = Cursor{Height: fork, Hash: forkHash}
+	return s.store.SaveCursor(ctx, s.cfg.ChainID, *cursor)
+}
+
+func (s *Scanner) processBlock(ctx context.Context, height uint64, cursor *Cursor) error {
+	b, err := s.chain.Block(ctx, height)
+	if err != nil {
+		return fmt.Errorf("scanner: block %d: %w", height, err)
+	}
+	if cursor.Hash != "" && b.ParentHash != cursor.Hash {
+		return fmt.Errorf("%w: block %d parent %s does not extend cursor %s", errs.ErrChainInconsistent, height, b.ParentHash, cursor.Hash)
+	}
+	recipients, err := s.store.ResolveRecipients(ctx, s.cfg.ChainID, transferTargets(b.Transfers))
+	if err != nil {
+		return fmt.Errorf("scanner: resolve recipients at %d: %w", height, err)
+	}
+	if len(recipients) > 0 {
+		configs, err := s.configs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, tr := range b.Transfers {
+			account, ok := recipients[tr.To]
+			if !ok {
+				continue
+			}
+			cfg, ok := configs[tr.Asset]
+			if !ok {
+				continue // unsupported or custodian-mode asset: dropped
+			}
+			if err := s.openTransfer(ctx, cfg, tr, account, b); err != nil {
+				return err
+			}
+		}
+	}
+	if err := s.store.RecordBlock(ctx, s.cfg.ChainID, b.Height, b.Hash); err != nil {
+		return fmt.Errorf("scanner: record block %d: %w", height, err)
+	}
+	*cursor = Cursor{Height: b.Height, Hash: b.Hash}
+	if err := s.store.SaveCursor(ctx, s.cfg.ChainID, *cursor); err != nil {
+		return fmt.Errorf("scanner: save cursor %d: %w", height, err)
+	}
+	return nil
+}
+
+// openTransfer opens a deposit for one watched transfer, or re-includes an
+// existing REORGED one when its transfer reappears on the canonical chain.
+func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr chain.Transfer, account string, b chain.Block) error {
+	id, err := logicalID(s.cfg.ChainID, tr)
+	if err != nil {
+		return err
+	}
+	transferID := id.String()
+	event := deposit.EventObserved
+	if tr.Amount.Cmp(cfg.MinAmount) < 0 {
+		event = deposit.EventObservedBelowMinimum
+	}
+	state, _, err := deposit.Transition(deposit.StateNone, event)
+	if err != nil {
+		return fmt.Errorf("scanner: initial state: %w", err)
+	}
+	opened, err := s.store.OpenDeposit(ctx, OpenParams{
+		TransferID: transferID,
+		State:      state,
+		Chain:      s.cfg.ChainID,
+		Asset:      tr.Asset,
+		Account:    account,
+		Address:    tr.To,
+		Amount:     tr.Amount,
+		Height:     b.Height,
+		Hash:       b.Hash,
+	})
+	if err != nil {
+		return fmt.Errorf("scanner: open deposit %s: %w", transferID, err)
+	}
+	if opened {
+		return nil
+	}
+	state, err = s.store.DepositState(ctx, transferID)
+	if err != nil {
+		return fmt.Errorf("scanner: deposit state %s: %w", transferID, err)
+	}
+	if state != deposit.StateReorged {
+		return nil // duplicate delivery on the canonical chain
+	}
+	if err := s.store.ReincludeDeposit(ctx, transferID, b.Height, b.Hash); err != nil {
+		return fmt.Errorf("scanner: reinclude %s: %w", transferID, err)
+	}
+	if err := s.engine.Apply(ctx, transferID, deposit.EventReincluded); err != nil {
+		return fmt.Errorf("scanner: reinclude %s: %w", transferID, err)
+	}
+	return nil
+}
+
+// advanceDepth drives PENDING → CREDITED → FINALIZED for canonical
+// deposits from the current head.
+func (s *Scanner) advanceDepth(ctx context.Context, head uint64) error {
+	tracked, err := s.store.TrackedDeposits(ctx, s.cfg.ChainID)
+	if err != nil {
+		return fmt.Errorf("scanner: tracked deposits: %w", err)
+	}
+	if len(tracked) == 0 {
+		return nil
+	}
+	configs, err := s.configs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range tracked {
+		cfg, ok := configs[t.Asset]
+		if !ok || t.Height > head {
+			continue
+		}
+		depth := head - t.Height + 1
+		switch {
+		case t.State == deposit.StatePending && depth >= cfg.NCredit:
+			if err := s.engine.Apply(ctx, t.TransferID, deposit.EventDepthReached); err != nil {
+				return fmt.Errorf("scanner: credit %s: %w", t.TransferID, err)
+			}
+		case t.State == deposit.StateCredited && depth >= cfg.NFinalize:
+			if err := s.engine.Apply(ctx, t.TransferID, deposit.EventFinalityReached); err != nil {
+				return fmt.Errorf("scanner: finalize %s: %w", t.TransferID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// expireReorged closes the reorg window: transfers that did not come back
+// are dropped (never credited) or reversed (credited).
+func (s *Scanner) expireReorged(ctx context.Context, head uint64) error {
+	reorged, err := s.store.ReorgedDeposits(ctx, s.cfg.ChainID)
+	if err != nil {
+		return fmt.Errorf("scanner: reorged deposits: %w", err)
+	}
+	if len(reorged) == 0 {
+		return nil
+	}
+	configs, err := s.configs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, r := range reorged {
+		if r.Height == nil {
+			// Crash between the state change and the mark: restart the
+			// window now.
+			if err := s.store.MarkReorged(ctx, r.TransferID, head); err != nil {
+				return fmt.Errorf("scanner: repair reorg mark %s: %w", r.TransferID, err)
+			}
+			continue
+		}
+		cfg, ok := configs[r.Asset]
+		if !ok || head-*r.Height < cfg.ReorgWindow {
+			continue
+		}
+		credited, err := s.store.HasCredit(ctx, r.TransferID)
+		if err != nil {
+			return fmt.Errorf("scanner: credit check %s: %w", r.TransferID, err)
+		}
+		event := deposit.EventWindowExpiredUncredited
+		if credited {
+			event = deposit.EventWindowExpiredCredited
+		}
+		if err := s.engine.Apply(ctx, r.TransferID, event); err != nil {
+			return fmt.Errorf("scanner: expire %s: %w", r.TransferID, err)
+		}
+	}
+	return nil
+}
+
+func (s *Scanner) configs(ctx context.Context) (map[string]AssetConfig, error) {
+	list, err := s.store.AssetConfigs(ctx, s.cfg.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("scanner: asset configs: %w", err)
+	}
+	configs := make(map[string]AssetConfig, len(list))
+	for _, c := range list {
+		configs[c.Asset] = c
+	}
+	return configs, nil
+}
+
+func transferTargets(transfers []chain.Transfer) []string {
+	seen := make(map[string]struct{}, len(transfers))
+	var addrs []string
+	for _, tr := range transfers {
+		if tr.To == "" || tr.Amount == nil {
+			continue
+		}
+		if _, ok := seen[tr.To]; !ok {
+			seen[tr.To] = struct{}{}
+			addrs = append(addrs, tr.To)
+		}
+	}
+	return addrs
+}
+
+func logicalID(chainID string, tr chain.Transfer) (identity.LogicalTransferID, error) {
+	switch tr.Kind {
+	case chain.Token:
+		return identity.NewTokenTransfer(chainID, tr.TxHash, tr.Asset, tr.LogIndex)
+	case chain.Native:
+		return identity.NewNativeTransfer(chainID, tr.TxHash)
+	case chain.Internal:
+		return identity.NewInternalNativeTransfer(chainID, tr.TxHash, tr.TraceIndex)
+	}
+	return nil, fmt.Errorf("scanner: unknown transfer kind %q", tr.Kind)
+}

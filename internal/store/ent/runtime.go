@@ -5,6 +5,8 @@ package ent
 import (
 	"deposit-crediting/internal/store/ent/accountbalance"
 	"deposit-crediting/internal/store/ent/assetconfig"
+	"deposit-crediting/internal/store/ent/canonicalblock"
+	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/ledgerentry"
@@ -68,6 +70,34 @@ func init() {
 	assetconfigDescReorgWindow := assetconfigFields[7].Descriptor()
 	// assetconfig.ReorgWindowValidator is a validator for the "reorg_window" field. It is called by the builders before save.
 	assetconfig.ReorgWindowValidator = assetconfigDescReorgWindow.Validators[0].(func(int) error)
+	canonicalblockFields := schema.CanonicalBlock{}.Fields()
+	_ = canonicalblockFields
+	// canonicalblockDescChain is the schema descriptor for chain field.
+	canonicalblockDescChain := canonicalblockFields[0].Descriptor()
+	// canonicalblock.ChainValidator is a validator for the "chain" field. It is called by the builders before save.
+	canonicalblock.ChainValidator = canonicalblockDescChain.Validators[0].(func(string) error)
+	// canonicalblockDescHeight is the schema descriptor for height field.
+	canonicalblockDescHeight := canonicalblockFields[1].Descriptor()
+	// canonicalblock.HeightValidator is a validator for the "height" field. It is called by the builders before save.
+	canonicalblock.HeightValidator = canonicalblockDescHeight.Validators[0].(func(int64) error)
+	// canonicalblockDescHash is the schema descriptor for hash field.
+	canonicalblockDescHash := canonicalblockFields[2].Descriptor()
+	// canonicalblock.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	canonicalblock.HashValidator = canonicalblockDescHash.Validators[0].(func(string) error)
+	chaincursorFields := schema.ChainCursor{}.Fields()
+	_ = chaincursorFields
+	// chaincursorDescChain is the schema descriptor for chain field.
+	chaincursorDescChain := chaincursorFields[0].Descriptor()
+	// chaincursor.ChainValidator is a validator for the "chain" field. It is called by the builders before save.
+	chaincursor.ChainValidator = chaincursorDescChain.Validators[0].(func(string) error)
+	// chaincursorDescHeight is the schema descriptor for height field.
+	chaincursorDescHeight := chaincursorFields[1].Descriptor()
+	// chaincursor.HeightValidator is a validator for the "height" field. It is called by the builders before save.
+	chaincursor.HeightValidator = chaincursorDescHeight.Validators[0].(func(int64) error)
+	// chaincursorDescHash is the schema descriptor for hash field.
+	chaincursorDescHash := chaincursorFields[2].Descriptor()
+	// chaincursor.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	chaincursor.HashValidator = chaincursorDescHash.Validators[0].(func(string) error)
 	depositFields := schema.Deposit{}.Fields()
 	_ = depositFields
 	// depositDescTransferID is the schema descriptor for transfer_id field.
@@ -95,11 +125,11 @@ func init() {
 	// deposit.DefaultCreditCycle holds the default value on creation for the credit_cycle field.
 	deposit.DefaultCreditCycle = depositDescCreditCycle.Default.(int)
 	// depositDescCreatedAt is the schema descriptor for created_at field.
-	depositDescCreatedAt := depositFields[11].Descriptor()
+	depositDescCreatedAt := depositFields[12].Descriptor()
 	// deposit.DefaultCreatedAt holds the default value on creation for the created_at field.
 	deposit.DefaultCreatedAt = depositDescCreatedAt.Default.(func() time.Time)
 	// depositDescUpdatedAt is the schema descriptor for updated_at field.
-	depositDescUpdatedAt := depositFields[12].Descriptor()
+	depositDescUpdatedAt := depositFields[13].Descriptor()
 	// deposit.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	deposit.DefaultUpdatedAt = depositDescUpdatedAt.Default.(func() time.Time)
 	// deposit.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

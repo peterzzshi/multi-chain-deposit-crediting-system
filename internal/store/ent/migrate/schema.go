@@ -55,6 +55,39 @@ var (
 			},
 		},
 	}
+	// CanonicalBlocksColumns holds the columns for the "canonical_blocks" table.
+	CanonicalBlocksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "chain", Type: field.TypeString},
+		{Name: "height", Type: field.TypeInt64},
+		{Name: "hash", Type: field.TypeString},
+	}
+	// CanonicalBlocksTable holds the schema information for the "canonical_blocks" table.
+	CanonicalBlocksTable = &schema.Table{
+		Name:       "canonical_blocks",
+		Columns:    CanonicalBlocksColumns,
+		PrimaryKey: []*schema.Column{CanonicalBlocksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "canonicalblock_chain_height",
+				Unique:  true,
+				Columns: []*schema.Column{CanonicalBlocksColumns[1], CanonicalBlocksColumns[2]},
+			},
+		},
+	}
+	// ChainCursorsColumns holds the columns for the "chain_cursors" table.
+	ChainCursorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "chain", Type: field.TypeString, Unique: true},
+		{Name: "height", Type: field.TypeInt64},
+		{Name: "hash", Type: field.TypeString},
+	}
+	// ChainCursorsTable holds the schema information for the "chain_cursors" table.
+	ChainCursorsTable = &schema.Table{
+		Name:       "chain_cursors",
+		Columns:    ChainCursorsColumns,
+		PrimaryKey: []*schema.Column{ChainCursorsColumns[0]},
+	}
 	// DepositsColumns holds the columns for the "deposits" table.
 	DepositsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -69,6 +102,7 @@ var (
 		{Name: "credit_cycle", Type: field.TypeInt, Default: 0},
 		{Name: "block_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "block_hash", Type: field.TypeString, Nullable: true},
+		{Name: "reorged_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -139,6 +173,8 @@ var (
 	Tables = []*schema.Table{
 		AccountBalancesTable,
 		AssetConfigsTable,
+		CanonicalBlocksTable,
+		ChainCursorsTable,
 		DepositsTable,
 		DepositAddressesTable,
 		LedgerEntriesTable,

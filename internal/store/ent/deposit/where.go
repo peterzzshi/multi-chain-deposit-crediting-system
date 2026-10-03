@@ -99,6 +99,11 @@ func BlockHash(v string) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldBlockHash, v))
 }
 
+// ReorgedHeight applies equality check predicate on the "reorged_height" field. It's identical to ReorgedHeightEQ.
+func ReorgedHeight(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldReorgedHeight, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldCreatedAt, v))
@@ -702,6 +707,56 @@ func BlockHashEqualFold(v string) predicate.Deposit {
 // BlockHashContainsFold applies the ContainsFold predicate on the "block_hash" field.
 func BlockHashContainsFold(v string) predicate.Deposit {
 	return predicate.Deposit(sql.FieldContainsFold(FieldBlockHash, v))
+}
+
+// ReorgedHeightEQ applies the EQ predicate on the "reorged_height" field.
+func ReorgedHeightEQ(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldEQ(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightNEQ applies the NEQ predicate on the "reorged_height" field.
+func ReorgedHeightNEQ(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNEQ(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightIn applies the In predicate on the "reorged_height" field.
+func ReorgedHeightIn(vs ...int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldIn(FieldReorgedHeight, vs...))
+}
+
+// ReorgedHeightNotIn applies the NotIn predicate on the "reorged_height" field.
+func ReorgedHeightNotIn(vs ...int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotIn(FieldReorgedHeight, vs...))
+}
+
+// ReorgedHeightGT applies the GT predicate on the "reorged_height" field.
+func ReorgedHeightGT(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGT(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightGTE applies the GTE predicate on the "reorged_height" field.
+func ReorgedHeightGTE(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldGTE(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightLT applies the LT predicate on the "reorged_height" field.
+func ReorgedHeightLT(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLT(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightLTE applies the LTE predicate on the "reorged_height" field.
+func ReorgedHeightLTE(v int64) predicate.Deposit {
+	return predicate.Deposit(sql.FieldLTE(FieldReorgedHeight, v))
+}
+
+// ReorgedHeightIsNil applies the IsNil predicate on the "reorged_height" field.
+func ReorgedHeightIsNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldIsNull(FieldReorgedHeight))
+}
+
+// ReorgedHeightNotNil applies the NotNil predicate on the "reorged_height" field.
+func ReorgedHeightNotNil() predicate.Deposit {
+	return predicate.Deposit(sql.FieldNotNull(FieldReorgedHeight))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

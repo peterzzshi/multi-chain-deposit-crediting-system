@@ -32,6 +32,9 @@ func (Deposit) Fields() []ent.Field {
 		field.Int("credit_cycle").Default(0),
 		field.Int64("block_height").Optional().Nillable(),
 		field.String("block_hash").Optional().Nillable(),
+		// Canonical head height when the reorg was detected; start of the
+		// reorg window countdown.
+		field.Int64("reorged_height").Optional().Nillable(),
 		field.Time("created_at").Default(timeNow).Immutable(),
 		field.Time("updated_at").Default(timeNow).UpdateDefault(timeNow),
 	}

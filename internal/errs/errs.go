@@ -12,4 +12,9 @@ var (
 	ErrDepositNotFound   = errors.New("deposit not found")
 	ErrAccountFlagged    = errors.New("account flagged")      // debits blocked until the reversal shortfall is resolved (ADR 0002)
 	ErrDuplicateRef      = errors.New("duplicate ledger ref") // idempotency boundary; usually treat as success (ADR 0001)
+
+	// ErrChainInconsistent means chain data contradicts the recorded cursor
+	// beyond what reorg rewind handles (e.g. a reorg landed mid-tick).
+	// Retry cannot fix it — the operator must repair the cursor.
+	ErrChainInconsistent = errors.New("chain inconsistent with cursor")
 )
