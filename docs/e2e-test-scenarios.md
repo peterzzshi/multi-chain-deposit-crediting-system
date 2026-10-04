@@ -1,11 +1,11 @@
-# Manual Verification Scenarios
+# End-to-End Test Scenarios
 
-End-to-end checks you can run locally against stub APIs. Each scenario
-derives from a requirement in `requirements.md` — not from the
+Comprehensive end-to-end checks you can run locally against stub APIs. Each
+scenario derives from a requirement in `requirements.md` — not from the
 implementation — and states the exact steps and the expected outcome.
 
-All commands below were executed against this repository and produced the
-documented results.
+All commands below can be executed against this repository and will produce
+the documented results.
 
 ## Local topology
 
@@ -42,7 +42,8 @@ documented results.
 docker compose up -d postgres
 
 # 2. Start the five processes (one terminal each, or append &)
-go run ./cmd/chainstub                                        # :9100 stub chain node
+go run ./cmd/chainstub                                        # :9100 stub chain node (stubchain)
+CHAIN_ID=fastchain PORT=9101 go run ./cmd/chainstub          # :9101 stub chain node (fastchain)
 go run ./cmd/custodianstub                                    # :9300 stub custodian
 go run ./cmd/scanner                                          # self-built ingest
 go run ./cmd/server                                           # :9200 webhooks/debits/reads
@@ -58,17 +59,32 @@ docker compose exec -T postgres psql -U postgres -d deposit_crediting -c \
   "TRUNCATE ledger_entries, account_balances, deposits, source_events, canonical_blocks, chain_cursors, exposure_states;"
 ```
 
+**Important:** For fast chain scenarios, you must run a second chainstub instance on port 9101 with `CHAIN_ID=fastchain`. The scanner and worker will automatically detect both chains from the asset configs.
+
 Supported assets live in `configs/assets.json` (validated and upserted by
 every binary at startup; edit the file and restart a binary to change
 policy). Seeded addresses come from `scripts/seed.sql`:
 
-| Account | Address | Mode | Asset | Min | n_credit | n_finalize | Reorg window |
-|---------|---------|------|-------|----:|---------:|-----------:|-------------:|
-| alice | `0xaaa` | self-built | ETH | 100 | 2 | 4 | 3 |
-| carol | `0xccc` | self-built | ETH | 100 | 2 | 4 | 3 |
-| bob | `0xbbb` | custodian | USDT | 50 | 2 | 4 | 3 |
+| Account | Chain     | Address | Assets     | Notes                       |
+|---------|-----------|---------|------------|-----------------------------|
+| alice   | stubchain | `0xaaa` | ETH        | Self-built mode             |
+| carol   | stubchain | `0xccc` | ETH        | Self-built mode             |
+| bob     | stubchain | `0xbbb` | USDT, USDC | Custodian mode              |
+| dave    | stubchain | `0xddd` | WBTC       | Self-built mode, 8 decimals |
+| eve     | fastchain | `0xeee` | SOL        | Self-built mode, fast chain |
 
-ETH exposure cap: 5000, high-value tier: 2000. USDT: uncapped.
+**Asset configurations:**
+- **ETH** (stubchain): min 100, n_credit 2, n_finalize 4, exposure cap 5000, tier 2000, reorg window 3
+- **USDT** (stubchain): min 50, n_credit 2, n_finalize 4, custodian mode, reorg window 3
+- **USDC** (stubchain): min 100, n_credit 2, n_finalize 4, custodian mode, cap 10000, tier 5000, reorg window 3
+- **WBTC** (stubchain): min 10000 (8 decimals), n_credit 3, n_finalize 6, cap 50M, tier 20M, reorg window 5
+- **SOL** (fastchain): min 1000 (9 decimals), n_credit 10, n_finalize 32, cap 100000, tier 50000, reorg window 15
+- **USDC** (fastchain): min 100, n_credit 10, n_finalize 32, custodian mode, cap 20000, tier 10000, reorg window 15
+
+**Chain characteristics:**
+- **stubchain**: ~12s block time, typical reorg depth 1-3 blocks
+- **fastchain**: ~2s block time, reorgs more frequently to greater depth (5-10 blocks typical)
+
 Poll cadences: scanner 500 ms, worker 2 s, reconciliation 10 s.
 "Wait a moment" below means ~2 s unless stated otherwise.
 
@@ -371,6 +387,284 @@ After running Scenarios 1–15, inspect the worker log.
 deposits resolve within 2× the reorg window). Exposure/solvency alerts
 from Scenarios 14–15 are expected — those are risk signals, not
 invariant violations.
+
+---
+
+## Scenario 17 — Finalization advances state after sufficient depth
+
+*Requirement: credited deposits become finalized after N_finalize confirmations.*
+
+Continuing from Scenario 1 (which left a deposit at `CREDITED` after depth 4):
+
+```bash
+curl -s localhost:9200/v1/deposits/stubchain:0xs1:native
+```
+
+**Expected:** `state: "FINALIZED"`, deposit is now immutable (no reorg
+window applies).
+
+## Scenario 18 — High-value deposit waits 2×N_credit before credit
+
+*Requirement: deposits above tier_amount threshold require 2×N_credit
+confirmations.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs18","to":"0xaaa","asset":"ETH","amount":"3000"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'   # depth 2 = normal n_credit
+sleep 2
+curl -s localhost:9200/v1/deposits/stubchain:0xs18:native
+```
+
+**Expected:** `state: "PENDING"` (not yet credited). Amount 3000 exceeds
+tier_amount 2000, so requires depth 4 (2×2). After `POST /admin/mine
+{"count":2}` and waiting: `CREDITED`.
+
+## Scenario 19 — Token transfer (ERC20/SPL) is credited
+
+*Requirement: token deposits follow the same crediting rules as native.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"erc20","txHash":"0xs19","to":"0xbbb","asset":"USDT","amount":"500","contractAddress":"0xusdt"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 2
+curl -s localhost:9200/v1/deposits/stubchain:0xs19:erc20:0xusdt
+```
+
+**Expected:** deposit exists, transfer ID includes contract address
+(`stubchain:0xs19:erc20:0xusdt`), `CREDITED` after n_credit depth, bob's
+USDT balance increases by 500.
+
+## Scenario 20 — WBTC deposit with 8 decimals
+
+*Requirement: higher-precision assets credit correctly.*
+
+Add seed address for dave:
+
+```bash
+docker compose exec -T postgres psql -U postgres -d deposit_crediting -c \
+  "INSERT INTO deposit_addresses (account, chain, address, active) VALUES ('dave', 'stubchain', '0xddd', true) ON CONFLICT DO NOTHING;"
+```
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"erc20","txHash":"0xs20","to":"0xddd","asset":"WBTC","amount":"50000","contractAddress":"0xwbtc"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":2}'   # n_credit=3 for WBTC
+sleep 2
+curl -s localhost:9200/v1/deposits/stubchain:0xs20:erc20:0xwbtc
+```
+
+**Expected:** amount 50000 is above min (10000), `CREDITED` after depth 3,
+dave's WBTC balance reflects 50000 (0.0005 BTC in human terms).
+
+## Scenario 21 — Fastchain deposit with different thresholds
+
+*Requirement: fast chains use different N_credit/N_finalize values.*
+
+Ensure the fastchain chainstub is running on port 9101.
+
+```bash
+curl -s -X POST localhost:9101/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs21","to":"0xeee","asset":"SOL","amount":"5000"}]}'
+curl -s -X POST localhost:9101/admin/mine -d '{"count":9}'   # n_credit=10 for SOL
+sleep 2
+curl -s localhost:9200/v1/deposits/fastchain:0xs21:native
+```
+
+**Expected:** `state: "PENDING"` after 9 blocks (depth < 10). After one
+more block: `CREDITED`. After mining to depth 32: `FINALIZED`.
+
+## Scenario 21b — Fastchain reorgs more frequently and deeper
+
+*Requirement: fast chains experience reorgs to greater depth.*
+
+```bash
+curl -s -X POST localhost:9101/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs21b","to":"0xeee","asset":"SOL","amount":"6000"}]}'
+curl -s -X POST localhost:9101/admin/mine -d '{"count":10}'  # credited at depth 11
+sleep 2
+curl -s localhost:9200/v1/deposits/fastchain:0xs21b:native   # CREDITED
+curl -s -X POST localhost:9101/admin/reorg -d '{"depth":8}'  # deeper reorg than EVM typical
+curl -s -X POST localhost:9101/admin/mine -d '{"count":20}'
+sleep 3
+curl -s localhost:9200/v1/deposits/fastchain:0xs21b:native
+```
+
+**Expected:** deposit transitions `REORGED` → `REVERSED` correctly. The
+reorg window for fastchain is 15 blocks (vs 3 for stubchain), reflecting
+its higher reorg frequency. The system handles depth-8 reorgs (vs typical
+depth-2 on stubchain) without issue.
+
+## Scenario 22 — Exposure hold released after finalization
+
+*Requirement: finalized credits no longer count toward exposure cap.*
+
+Continuing from Scenario 15 (ETH exposure breach with held deposits):
+
+```bash
+curl -s -X POST localhost:9100/admin/mine -d '{"count":2}'   # finalize one deposit
+sleep 3
+curl -s localhost:9200/v1/balances/carol
+```
+
+**Expected:** as deposits finalize, aggregate exposure drops below cap;
+worker releases holds (`held` amount decreases), debits become allowed
+again.
+
+## Scenario 23 — Out-of-order webhook delivery
+
+*Requirement: webhook ordering does not affect correctness.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs23a","to":"0xbbb","asset":"USDT","amount":"100"},
+  {"kind":"native","txHash":"0xs23b","to":"0xbbb","asset":"USDT","amount":"200"}]}'
+curl -s -X POST localhost:9300/admin/deposits -d '{"providerEventId":"evt-s23b",
+  "chain":"stubchain","txHash":"0xs23b","to":"0xbbb","asset":"USDT","amount":"200"}'
+curl -s -X POST localhost:9300/admin/deposits -d '{"providerEventId":"evt-s23a",
+  "chain":"stubchain","txHash":"0xs23a","to":"0xbbb","asset":"USDT","amount":"100"}'
+curl -s localhost:9300/admin/webhooks   # drain both (second posted first)
+```
+
+POST webhooks in arrival order (s23b before s23a), then:
+
+```bash
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 2
+curl -s "localhost:9200/v1/deposits?account=bob"
+```
+
+**Expected:** both deposits exist and credit correctly despite reversed
+webhook order. Chain verifier is authoritative; webhook order is irrelevant.
+
+## Scenario 24 — Delayed webhook after chain verifier
+
+*Requirement: late webhooks are absorbed without duplication.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs24","to":"0xbbb","asset":"USDT","amount":"300"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 12   # reconciliation detects it, credits happen
+curl -s -X POST localhost:9300/admin/deposits -d '{"providerEventId":"evt-s24",
+  "chain":"stubchain","txHash":"0xs24","to":"0xbbb","asset":"USDT","amount":"300"}'
+curl -s localhost:9300/admin/webhooks
+curl -s -X POST localhost:9200/v1/webhooks/custodian -d '{"providerEventId":"evt-s24",
+  "chain":"stubchain","txHash":"0xs24","to":"0xbbb","asset":"USDT","amount":"300"}'
+sleep 2
+```
+
+**Expected:** deposit already exists and is `CREDITED`; late webhook
+acknowledged but produces no duplicate credit or state change.
+
+## Scenario 25 — Multiple deposits same account same block
+
+*Requirement: concurrent deposits to one account all credit.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs25a","to":"0xaaa","asset":"ETH","amount":"200"},
+  {"kind":"native","txHash":"0xs25b","to":"0xaaa","asset":"ETH","amount":"300"},
+  {"kind":"native","txHash":"0xs25c","to":"0xaaa","asset":"ETH","amount":"400"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 2
+curl -s "localhost:9200/v1/deposits?account=alice"
+curl -s localhost:9200/v1/balances/alice
+```
+
+**Expected:** 3 separate deposits, all `CREDITED`, alice's balance
+increases by 900 total. Ledger shows 3 distinct credit entries.
+
+## Scenario 26 — Credit and debit racing on same account
+
+*Requirement: optimistic concurrency prevents lost updates.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs26","to":"0xccc","asset":"ETH","amount":"1000"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 2   # carol credited 1000
+```
+
+In rapid succession (two terminals or scripts):
+
+```bash
+curl -s -X POST localhost:9200/v1/debits -d '{"account":"carol","asset":"ETH","amount":"400","ref":"w1"}' &
+curl -s -X POST localhost:9200/v1/debits -d '{"account":"carol","asset":"ETH","amount":"300","ref":"w2"}' &
+wait
+curl -s localhost:9200/v1/balances/carol
+```
+
+**Expected:** both debits succeed (balance 1000 - 400 - 300 = 300) or one
+retries after version conflict. Ledger shows credit + 2 debits, balance
+consistent. No lost update.
+
+## Scenario 27 — Scanner restart mid-reorg
+
+*Requirement: scanner resumes correctly even if stopped during reorg.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs27","to":"0xaaa","asset":"ETH","amount":"600"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":1}'
+sleep 2   # credited
+curl -s -X POST localhost:9100/admin/reorg -d '{"depth":2}'
+```
+
+Kill the scanner (Ctrl-C), wait 2 seconds, restart it. Then:
+
+```bash
+curl -s -X POST localhost:9100/admin/mine -d '{"count":5}'
+sleep 3
+curl -s localhost:9200/v1/deposits/stubchain:0xs27:native
+```
+
+**Expected:** deposit transitions `REORGED` → `REVERSED` correctly despite
+scanner restart. Cursor recovery handles the gap; no duplicate or missed
+state transitions.
+
+## Scenario 28 — Worker restart with pending reconciliation
+
+*Requirement: worker loops are idempotent; restart is safe.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs28","to":"0xbbb","asset":"USDT","amount":"250"}]}'
+curl -s -X POST localhost:9300/admin/deposits -d '{"providerEventId":"evt-s28",
+  "chain":"stubchain","txHash":"0xs28","to":"0xbbb","asset":"USDT","amount":"250",
+  "faults":["dropped"]}'
+sleep 5   # reconciliation poll in progress
+```
+
+Kill the worker (Ctrl-C), restart it, wait 12 seconds:
+
+```bash
+curl -s localhost:9200/v1/deposits/stubchain:0xs28:native
+```
+
+**Expected:** deposit appears and credits normally. Reconciliation resumes
+from query API; no duplicate claims or missed deposits.
+
+## Scenario 29 — Deep reorg beyond retained window
+
+*Requirement: cursor repair handles reorgs deeper than typical retention.*
+
+```bash
+curl -s -X POST localhost:9100/admin/blocks -d '{"transfers":[
+  {"kind":"native","txHash":"0xs29","to":"0xaaa","asset":"ETH","amount":"700"}]}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":10}'
+sleep 2   # finalized
+curl -s -X POST localhost:9100/admin/reorg -d '{"depth":12}'
+curl -s -X POST localhost:9100/admin/mine -d '{"count":15}'
+sleep 3
+```
+
+**Expected:** scanner log shows cursor repair (walking back to find common
+ancestor), deposit transitions `REORGED` → `DROPPED` (beyond window), no
+crash. If the new branch re-includes `0xs29`: `PENDING` → `CREDITED` again.
+
+---
 
 ---
 

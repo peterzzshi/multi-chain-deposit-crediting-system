@@ -2,6 +2,23 @@
 
 What a reorg can do to a deposit, the models behind the confirmation/exposure policy, and the parameter values the design uses. Vocabulary: [../CONTEXT.md](../CONTEXT.md). State machine: [state-machine.md](state-machine.md). Decisions: ADR [0002](adr/0002-reversal-after-credit-and-finality-horizon.md), [0006](adr/0006-risk-policy-layering.md).
 
+## Quick Reference
+
+For operators who need the numbers without the derivation:
+
+| Parameter               | EVM (~12 s)          | Fast (~2 s)     | Purpose                                                             |
+|-------------------------|----------------------|-----------------|---------------------------------------------------------------------|
+| `N_credit`              | 12 (~2.5 min)        | 150 (~5 min)    | Confirmation depth before crediting                                 |
+| `N_finalize`            | 100 (~20 min)        | 1,000 (~33 min) | Finality horizon; stop watching (terminal)                          |
+| Retained window         | 500 blocks           | 5,000 blocks    | Reorg rewind depth (derived: 2–5× `N_finalize`)                     |
+| High-value tier         | \$50k (illustrative) | Same            | Above this: wait 2× `N_credit`, hold until `N_finalize`             |
+| Exposure cap `E_max`    | Business input       | Business input  | `min(C_attack/k, risk_budget)` — bounds spendable unfinalized value |
+| Reconciliation interval | 5 min                | Same            | Custodian query API poll cadence                                    |
+
+Scanner polls every 500 ms; worker (re-checker, risk, reconciliation) polls every 2s in the prototype.
+
+---
+
 ## What a reorg can mean for a deposit
 
 A transaction reorged out of its block may be **re-included** on the replacement branch, **become invalid** (ordering/state changed), or **never return**. Only the latter two put credited funds at risk. A reorg does not automatically return tokens to the sender — the canonical chain rolls back the transfer — and whether the platform absorbs a shortfall depends on when it made the funds spendable. That timing is a policy choice, not a chain fact.
@@ -14,12 +31,12 @@ $$P(\text{depth} \geq d) = p_1 \cdot r^{\,d-1} \qquad X(N) = B_{\text{day}} \cdo
 
 $$N_{\text{natural}} = \min\{\,N : X(N) \leq \varepsilon\,\}$$
 
-| Symbol | Meaning |
-|---|---|
-| $p_1$ | probability that a block is replaced at depth 1 (measured from chain history) |
-| $r$ | decay factor per additional depth, $0 < r < 1$ (measured; the geometric model is memoryless, so it *underestimates* clustered reorgs — hence the empirical floor below) |
-| $B_{\text{day}}$ | blocks per day (EVM: $86{,}400/12 = 7{,}200$; fast chain: $86{,}400/2 = 43{,}200$) |
-| $\varepsilon$ | tolerated expected number of reorgs-past-depth-$N$ per day (business loss tolerance) |
+| Symbol           | Meaning                                                                                                                                                                 |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $p_1$            | probability that a block is replaced at depth 1 (measured from chain history)                                                                                           |
+| $r$              | decay factor per additional depth, $0 < r < 1$ (measured; the geometric model is memoryless, so it *underestimates* clustered reorgs — hence the empirical floor below) |
+| $B_{\text{day}}$ | blocks per day (EVM: $86{,}400/12 = 7{,}200$; fast chain: $86{,}400/2 = 43{,}200$)                                                                                      |
+| $\varepsilon$    | tolerated expected number of reorgs-past-depth-$N$ per day (business loss tolerance)                                                                                    |
 
 Empirical floor on top, since real reorgs cluster:
 
@@ -35,14 +52,14 @@ $$C_{\text{attack}} = f_{\text{crit}} \cdot S \cdot P \cdot (1 - \rho) + C_{\tex
 
 $$V_{\text{attack}} = V_{\text{victims}} + V_{\text{short}} + \text{MEV} - C_{\text{attack}} \qquad \text{attack is rational iff } V_{\text{attack}} > 0$$
 
-| Symbol | Meaning |
-|---|---|
-| $f_{\text{crit}}$ | Byzantine stake fraction required (≥ 1/3 to create conflicting finality; > 2/3 for stronger variants — protocol-specific) |
-| $S \cdot P$ | total staked value |
-| $\rho$ | fraction of slashed value the attacker recovers (hedges, circumvention) |
-| $C_{\text{acquire}}$ | stake acquisition cost: market-impact premium, borrow rates — often dominates $f_{\text{crit}} \cdot S \cdot P$ |
-| $C_{\text{exec}},\ R_{\text{hedge}},\ V_{\text{short}},\ \text{MEV}$ | execution cost; hedge/short value retained; MEV extracted during the attack window |
-| $V_{\text{victims}}$ | **double-spent value aggregated across ALL simultaneous victims** — the attacker attacks the chain, not our deposit |
+| Symbol                                                               | Meaning                                                                                                                   |
+|----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| $f_{\text{crit}}$                                                    | Byzantine stake fraction required (≥ 1/3 to create conflicting finality; > 2/3 for stronger variants — protocol-specific) |
+| $S \cdot P$                                                          | total staked value                                                                                                        |
+| $\rho$                                                               | fraction of slashed value the attacker recovers (hedges, circumvention)                                                   |
+| $C_{\text{acquire}}$                                                 | stake acquisition cost: market-impact premium, borrow rates — often dominates $f_{\text{crit}} \cdot S \cdot P$           |
+| $C_{\text{exec}},\ R_{\text{hedge}},\ V_{\text{short}},\ \text{MEV}$ | execution cost; hedge/short value retained; MEV extracted during the attack window                                        |
+| $V_{\text{victims}}$                                                 | **double-spent value aggregated across ALL simultaneous victims** — the attacker attacks the chain, not our deposit       |
 
 Why this model cannot be the credit trigger (ADR 0006):
 
@@ -59,13 +76,13 @@ $$N_{\text{finalize}} = \text{finality horizon, far deeper} \quad \text{[stop wa
 
 $$\sum (\text{unfinalized, spendable credited value}) \;\leq\; \min\!\Big(\frac{C_{\text{attack}}}{k},\ B_{\text{budget}}\Big)$$
 
-| Symbol | Meaning |
-|---|---|
+| Symbol                         | Meaning                                                              |
+|--------------------------------|----------------------------------------------------------------------|
 | $N_{\text{econ}}(\text{tier})$ | depth implied by the adversarial model for that tier's deposit value |
-| $k$ | safety factor (e.g., 10–100) absorbing parameter uncertainty |
-| $B_{\text{budget}}$ | business risk budget for reorg losses |
+| $k$                            | safety factor (e.g., 10–100) absorbing parameter uncertainty         |
+| $B_{\text{budget}}$            | business risk budget for reorg losses                                |
 
-On a chain with a genuine BFT finality signal we would credit at finality and the adversarial model collapses to monitoring; the given conditions (frequent deep reorgs on both chains) rule that out by assumption.
+On a chain with a genuine BFT finality signal, we would credit at finality and the adversarial model collapses to monitoring; the given conditions (frequent deep reorgs on both chains) rule that out by assumption.
 
 ### Exposure-cap enforcement (runtime)
 
@@ -84,19 +101,19 @@ Deliberately few knobs; each appears in the capacity math or the state machine, 
 
 ### Per chain
 
-| Parameter | EVM (~12 s) | Fast (~2 s) | Reasoning |
-|---|---|---|---|
-| $N_{\text{credit}}$ | 12 (~2.5 min) | 150 (~5 min) | Credit trigger. Typical reorgs on such chains are 1–3 blocks; 12 blocks ≈ 4–6× margin at acceptable latency. Fast chain reorgs more often and deeper **[given]**, so scale to ~5 min wall-clock and validate against $m \times \text{deepest\_reorg\_seen}$. |
-| $N_{\text{finalize}}$ | 100 (~20 min) | 1,000 (~33 min) | Finality horizon: stop watching, deposit terminal. ~8× credit depth; past it, residual risk is accepted by policy and bounded by $E_{\max}$. |
-| retained window | 500 | 5,000 | **Derived, not a knob**: 2–5× $N_{\text{finalize}}$ of block hashes for rewind — negligible storage (< 5 MB). |
+| Parameter             | EVM (~12 s)   | Fast (~2 s)     | Reasoning                                                                                                                                                                                                                                                    |
+|-----------------------|---------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| $N_{\text{credit}}$   | 12 (~2.5 min) | 150 (~5 min)    | Credit trigger. Typical reorgs on such chains are 1–3 blocks; 12 blocks ≈ 4–6× margin at acceptable latency. Fast chain reorgs more often and deeper **[given]**, so scale to ~5 min wall-clock and validate against $m \times \text{deepest\_reorg\_seen}$. |
+| $N_{\text{finalize}}$ | 100 (~20 min) | 1,000 (~33 min) | Finality horizon: stop watching, deposit terminal. ~8× credit depth; past it, residual risk is accepted by policy and bounded by $E_{\max}$.                                                                                                                 |
+| retained window       | 500           | 5,000           | **Derived, not a knob**: 2–5× $N_{\text{finalize}}$ of block hashes for rewind — negligible storage (< 5 MB).                                                                                                                                                |
 
 ### Global
 
-| Parameter | Value | Reasoning |
-|---|---|---|
+| Parameter         | Value                | Reasoning                                                                                                                                                                                |
+|-------------------|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | $T_{\text{tier}}$ | \$50k (illustrative) | **One** tier boundary only: above it, wait $2 \times N_{\text{credit}}$ and hold spendability until $N_{\text{finalize}}$. More tiers add policy surface without changing the mechanism. |
-| $E_{\max}$ | symbolic | Exposure cap $\min(C_{\text{attack}}/k,\ \text{business budget})$ — a business input, not an engineering constant. |
-| $R$ | 5 min | Reconciliation interval against the custodian query API; bounds missed-webhook detection delay, sized to provider rate limits. |
+| $E_{\max}$        | symbolic             | Exposure cap $\min(C_{\text{attack}}/k,\ \text{business budget})$ — a business input, not an engineering constant.                                                                       |
+| $R$               | 5 min                | Reconciliation interval against the custodian query API; bounds missed-webhook detection delay, sized to provider rate limits.                                                           |
 
 Anything not listed (exact tier amount, $m$, $k$) is a policy default to be tuned from measured chain data, not a design parameter.
 

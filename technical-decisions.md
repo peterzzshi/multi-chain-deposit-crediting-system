@@ -14,9 +14,17 @@ Working answers and trade-offs for the multi-chain deposit-crediting assignment.
 
 Treat the block times, transaction volume, and reorg behavior in the prompt as the design inputs. Base or Polygon could be illustrative examples, but their real behavior should not silently replace the hypothetical conditions. Support assets through configuration, keyed by chain and asset identity; native coins and tokens have different transfer observations and metadata.
 
-Credit mode is selected per `(chain, asset)` pair, and both modes operate at the same time. Persist the selected mode and relevant asset configuration/version on each deposit, so a later configuration change does not reinterpret an in-flight deposit.
+Credit mode is selected once per canonical asset, while confirmation and risk
+thresholds remain chain-specific. Both modes operate at the same time across
+the asset set. Persist the selected mode and relevant asset
+configuration/version on each deposit, so a later configuration change does
+not reinterpret an in-flight deposit.
 
-The prompt's one-address-per-chain rule is resolved by widening the mapping: an address belongs to exactly one `(user, chain, mode)` — a user may hold one self-built and one custodian address per chain — enforced by a unique constraint on `(chain, address)` (see `docs/assumptions-and-scope.md`). A self-generated platform address and a custodian-generated address cannot be the same physical address, so this is the minimal consistent interpretation.
+The prompt's one-address-per-chain rule is enforced literally: one row per
+`(account, chain)`, plus a separate unique constraint on `(chain, address)` so
+that a physical address cannot be assigned twice. The address is mode-neutral;
+the asset configuration owns routing, so a user cannot silently split one
+chain across two mode-specific addresses.
 
 ## Transactions, Transfers, and Events
 
@@ -34,7 +42,11 @@ Canonical definitions live in `CONTEXT.md` (blockchain transaction vs transfer v
 
 ## Address Lookup
 
-Store address-to-owner/asset/mode mappings in PostgreSQL with an index. Five million 20-byte EVM addresses are ~100 MB of raw bytes; indexes, row metadata, and associated fields add overhead (see Capacity Estimation). An in-memory LRU cache can cut repeated lookups but needs bounded sizing and cross-replica invalidation behavior.
+Store address-to-owner mappings in PostgreSQL with an index; asset policy is
+looked up separately. Five million 20-byte EVM addresses are ~100 MB of raw
+bytes; indexes, row metadata, and associated fields add overhead (see Capacity
+Estimation). An in-memory LRU cache can cut repeated lookups but needs bounded
+sizing and cross-replica invalidation behavior.
 
 A Bloom filter is an optional membership pre-filter: "definitely absent" avoids a database lookup; "possibly present" still requires one. It is an optimization, not the source of truth — measure lookup cost before adding it.
 
@@ -49,7 +61,7 @@ First decomposition:
 | Table                           | Contents                                                                                     |
 |---------------------------------|----------------------------------------------------------------------------------------------|
 | `asset_configs`                 | chain, asset/contract, decimals, custody mode, confirmation policy                           |
-| `deposit_addresses`             | user/account, chain, address, mode, asset scope, active/version metadata                     |
+| `deposit_addresses`             | user/account, chain, address, active/version metadata; mode comes from asset policy |
 | `chain_cursors`, `chain_blocks` | last processed height/hash + recent parent/hash window for restart and reorg detection       |
 | `source_events`                 | append-only webhook/provider envelopes with source event IDs and raw payloads                |
 | `deposits`                      | one logical creditable transfer, its lifecycle state, canonical block facts                  |
@@ -89,107 +101,31 @@ The cursor is not a finality marker. On restart, replaying the last few blocks i
 
 ## Capacity Estimation
 
-The key distinction is **chain-observation throughput** vs **deposit throughput**: the scanner must keep up with every block, but database ledger writes are needed only for matched deposit transfers and provider events.
+Moved to [docs/capacity-estimation.md](docs/capacity-estimation.md) as a standalone deliverable. Summary:
+- **Chain observation**: 1,750 tx/s average, ~3,500 tx/s at 2x peak
+- **Deposit write throughput**: ~70–700 writes/s (depends on 0.1%–1% match rate)
+- **Scanner memory**: ~100–500 MiB per process
+- **Storage**: ~0.6–6 GB/day for 30-day hot retention
+- **Measured benchmarks**: 783 credits/s (parallel), 228k tx/s scanner filter, 58ms deep reorg replay
 
-### Input throughput
+## Assumptions
 
-```text
-blocks_per_day = 86,400 / block_time
-tx_per_second  = tx_per_block / block_time
-tx_per_day     = blocks_per_day * tx_per_block
-```
+Explicit assumptions the design rests on:
 
-| Chain        | Block time | Blocks/day | Average tx/s |  Transactions/day |
-|--------------|-----------:|-----------:|-------------:|------------------:|
-| EVM-like     |       12 s |      7,200 |          250 |      21.6 million |
-| Faster chain |        2 s |     43,200 |        1,500 |     129.6 million |
-| **Total**    |            | **50,400** |    **1,750** | **151.2 million** |
+1. **Node interface** provides blocks with hash + parent hash, transaction receipts with logs, and execution traces (needed for internal native transfers). Per-chain adapter hides the differences; the fast chain is assumed account-based with equivalent per-transfer observability and probabilistic finality (the prompt's reorg behavior rules out relying on a finality gadget).
+2. **Address uniqueness**: each account has one deposit address per chain, and each physical address belongs to one account; enforced by unique constraints on `(account, chain)` and `(chain, address)`. Mode is not an address property; the asset policy owns it.
+3. **Timestamps are never used** for identity or ordering — only block height/hash and log/trace indexes.
+4. **Amounts** are integer base units everywhere; decimals live only in `asset_configs` for display.
+5. **Webhook delivery** may duplicate, reorder, delay, or silently drop events (prompt-given); the custodian query API is eventually consistent with the custodian's own books.
+6. **Custodian does not reliably notify reorgs.** The platform independently re-checks credited-but-unfinalized custodian deposits via targeted on-chain queries until the finality horizon.
+7. **Hot wallet / pool balance** (withdrawal-side) uses optimistic conditional updates with a retryable insufficient-funds error; kept low as a security policy. Atomic guard is the DB conditional update, never app-level check-then-act.
 
-Size production for a peak multiplier, not the average: at 2x peak the scanner and parsing pipeline sustain ~3,500 tx/s, with headroom for replaying a reorg window. A block is a bounded batch of ~3,000 transactions; the stream never loads a whole day into memory.
+## Out of scope
 
-### Scanner memory
+Per the prompt:
+- Withdrawal flow itself, fund sweeping/consolidation, key management and signing, node selection/operations.
 
-```text
-working_set ~= blocks_in_flight * tx_per_block * bytes_per_tx * expansion_factor
-```
-
-With 2 blocks in flight, a 1–4 KiB normalized transaction representation, and 3x parsing/indexing overhead:
-
-```text
-2 * 3,000 * (1–4 KiB) * 3 ~= 18–72 MiB per chain worker
-```
-
-Add RPC buffers, queues, metrics, and the address cache: a practical initial allocation is ~100–500 MiB per scanner process, validated by load tests. The exact value depends on node response sizes and whether traces are requested.
-
-Optional Bloom filter sizing: `m = -n * ln(fpr) / ln(2)^2`. For `n = 5,000,000` addresses, a 1% false-positive filter is ~6 MiB; 0.1% is ~9 MiB. Positives still require an indexed PostgreSQL lookup.
-
-### Address and event storage
-
-Five million 20-byte addresses are ~100 MB raw, but row metadata, ownership fields, and indexes make the footprint materially larger: budget ~0.5–2 GB for the address mapping until measured.
-
-Do not persist every full transaction body indefinitely. Retain compact block headers/cursors and matched observations; large raw provider payloads fall under a retention policy.
-
-```text
-records_per_day  = transactions_per_day * deposit_match_rate
-storage_per_day ~= records_per_day * bytes_per_record * storage_multiplier
-```
-
-Illustrative scenario, not a requirement — 0.1% match rate, 2 KiB per normalized record, 2x table/index overhead:
-
-```text
-151.2M * 0.001 = 151,200 records/day
-151,200 * 2 KiB * 2 ~= 0.6 GB/day
-30-day hot retention ~= 18 GB
-```
-
-At a 1% match rate the same assumptions give ~6 GB/day and ~180 GB for 30 days. State the assumed match rate and retention period rather than claiming a single storage number.
-
-### Database write throughput
-
-Let `r` be the matched-transfer rate and `w` the durable writes per matched transfer (source observation, transfer projection, ledger entry, optional balance projection):
-
-```text
-write_rate ~= r * w
-```
-
-At 0.1% match, `r` ≈ 1.75 matched transfers/s; at 1%, ≈ 17.5/s. With four durable writes per match and a 10x peak factor: ~70 writes/s or ~700 writes/s respectively. This is the workload to benchmark PostgreSQL and the ledger-concurrency design against — it is not 1,750 ledger writes/s, because most chain transactions are irrelevant to the platform.
-
-### Storage detail (per table, first year)
-
-- `source_events` (custodian webhooks): ~50% of matched records at 2–3x duplicate deliveries, ~1.5 KiB jsonb payload → ~0.3 GB/day raw. Dominant growth table: 90-day hot retention, archive beyond.
-- `deposits` projection: ~0.4 KiB/row incl. indexes → ~60 MB/day at 0.1% match.
-- `ledger_entries`: credits + debits + rare reversals at ~2x the deposit rate, ~250 B/row → ~75 MB/day.
-- `chain_blocks` retained reorg window (EVM 500 + fast chain 5,000 hashes): < 5 MB — negligible.
-
-### Reorg replay
-
-Replay is CPU/DB-bound, not arrival-bound, so catch-up runs faster than live ingest: re-filtering the full retained window (worst case 5,000 fast-chain blocks ≈ 15M tx) at ~10k tx/s takes ~25 minutes for an exceptional deep event; typical reorgs of 2–10 blocks replay in seconds. Cursor commits are ~35/min — trivial.
-
-These are order-of-magnitude planning numbers. Replace the match rate, payload size, peak multiplier, retention period, and replay depth with measured or explicitly agreed assumptions before the walkthrough. The reorg-risk models in [docs/risk-policy.md](docs/risk-policy.md) tune confirmation and exposure policy; they do not substitute for this throughput, memory, and storage estimate.
-
-### Measured (P5 benchmarks, 2026-10-03)
-
-Environment: Apple M2, dockerized Postgres 16, single test client; integration benchmarks in `internal/store/bench_integration_test.go` and `internal/scanner/bench_integration_test.go` (`go test -tags=integration -bench`). Order-of-magnitude validation of the estimates above, not a production sizing.
-
-| Path                                                            |                            Estimate |                                                 Measured | Verdict                                                             |
-|-----------------------------------------------------------------|------------------------------------:|---------------------------------------------------------:|---------------------------------------------------------------------|
-| Credit write path (sequential, one account)                     | ~70–700 writes/s peak (system-wide) | ~355 credits/s (~2.8 ms/credit, ~8 statements in one tx) | per-account serialization bound, as designed                        |
-| Credit write path (parallel, 16 accounts)                       |                                   — |                                           ~783 credits/s | system-wide peak clears the 700/s stress case                       |
-| External debits (sequential)                                    |                                   — |                                            ~936 debits/s | headroom                                                            |
-| Scanner filter (10k-address table, 3,000-tx blocks, 0.1% match) |              ~3,500 tx/s at 2x peak |                                            ~228,000 tx/s | ~65x headroom; re-test at 5M addresses before Bloom filter decision |
-| Deep-reorg rewind + replay (10 blocks)                          |                             seconds |                                                   ~58 ms | well inside one block interval                                      |
-
-Caveats: benchmark Postgres runs unsynchronized (local docker); the 5M-row address table will slow `ResolveRecipients` vs the 10k-row test — the unique `(chain, address)` index keeps lookup O(log n), so degradation should be modest, but the Bloom pre-filter decision waits for that measurement (non-goals).
-
-## Open Design Work — status
-
-- ~~Define deposit states~~ → Resolved: shared machine `PENDING → CREDITED → FINALIZED` with `REORGED` / `DROPPED` / `REVERSED` / `BELOW_MINIMUM` (ADR 0005, glossary in CONTEXT.md).
-- ~~Confirmation thresholds and reorg behavior before/after credit~~ → Resolved: minimal parameter set in `docs/risk-policy.md` §5; reversal + finality horizon in ADR 0002.
-- ~~Address ownership across modes~~ → Resolved: address belongs to exactly one `(user, chain, mode)`; mode per `(chain, asset)`; unique `(chain, address)`.
-- ~~Below-minimum (dust) deposits (Q16)~~ → Resolved: skip the credit, persist the observation in terminal `BELOW_MINIMUM` for support visibility.
-- ~~Ingest pipeline shape + message format (Q19/Q20)~~ → Resolved: broker-less pipeline over PostgreSQL; Kafka + Avro deferred with trigger conditions (ADR 0007). Stack recorded there: Go + ent + mockery.
-- ~~Scanner-watching custodian addresses (Q22)~~ → Deferred: per-deposit targeted queries + 5-min reconciliation poll suffice (noted in ADR 0004).
-- ~~Exposure-cap enforcement (Q21)~~ → Resolved: runtime monitor; at/over cap, new credits post but spendability is held (docs/risk-policy.md §4).
-- Capacity assumptions → Committed for the deliverable (Q23): 0.1% match rate as base, 1% as stress; 2x scanner / 10x write peak; 30-day hot retention. Flagged as illustrative in the estimate above.
-- Reconciliation and correctness tests → Approach agreed: fault-injection harness (mock chain with controllable reorgs + mock custodian with duplicate/reorder/delay/drop knobs) as the primary verification vehicle; invariant checks as test assertions plus documented runtime monitors; chain re-checker re-verifies custodian deposits on-chain until the finality horizon (Q15).
-- ~~Deliverables~~ → Produced: [docs/architecture.md](docs/architecture.md), [docs/state-machine.md](docs/state-machine.md), [docs/trade-offs.md](docs/trade-offs.md); capacity estimation is the section above.
+By design choice (noted for walkthrough):
+- **Webhook signature verification / provider authentication**: assumed in production, excluded from the design discussion to keep focus on crediting correctness.
+- **Below-minimum (dust) deposits**: the minimum is enforced at the UI; the system **skips the credit** but persists the observation in terminal state BELOW_MINIMUM for support visibility (UI enforcement is not a boundary — direct on-chain sends bypass it). No ledger effect, so no correctness risk. Unsupported assets remain silently dropped.
+- Debit flow internals (withdrawal/trade execution); only the ledger's concurrency boundary with them is in scope.

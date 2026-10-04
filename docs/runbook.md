@@ -4,17 +4,17 @@ Alert sources: the risk monitor (`internal/risk`), invariant checker, solvency c
 
 ## Alerts
 
-| Signal | Meaning | Action |
-|---|---|---|
-| `exposure alert` level=critical | Unfinalized spendable exposure ≥ E_max for (chain, asset); spendability holds active — new credits post but are not spendable (risk-policy §4) | Expected self-protection. Confirm finalization is progressing (exposure drains). If it stays at cap, check scanner/re-checker health and consider raising N_finalize or the cap via config change. No ledger action needed — credits still post |
-| `exposure alert` level=warn | Exposure ≥ 80% of cap | Watch finalization rate vs deposit rate; prepare for holds |
-| `vault solvency discrepancy` | Custodian ledger total exceeds vault total for an asset (ADR 0004) | Page immediately. Freeze new address issuance for that asset, reconcile custodian statements, treat as potential custodian insolvency |
-| `credited_without_entry` | A deposit is CREDITED/FINALIZED/REVERSED with no credit ledger entry — a missed credit (primary correctness invariant) | Page. Inspect the deposit row and engine logs at credit time; the ledger must be repaired manually after root cause |
-| `ledger_balance_mismatch` | Ledger replay ≠ balance projection for an (account, asset) | Page. The projection is rebuildable: recompute from `ledger_entries` and correct `account_balances` in one transaction; investigate the write path that diverged |
-| `reorg_resolution_lag` | Deposit still REORGED long past its reorg window | Scanner/re-checker stuck. Check its error log; on `ErrChainInconsistent` see cursor repair below |
-| `scanner tick failed` repeating | Node unreachable, DB error, or (rarely) chain inconsistency | Transient node errors self-heal. Persistent: check node RPC health, then DB connectivity |
-| `custodian claim contradicts chain, rejected` | Webhook/API claim does not match chain facts | Normal in small numbers (provider quirks). A sustained rate means custodian data corruption — escalate to the provider |
-| account flagged (balance negative) | A reversal exceeded the remaining balance (ADR 0002) | Expected after reorg-after-spend. Debits are blocked automatically. Ops: contact the user for top-up; the account unflags when the balance is non-negative again |
+| Signal                                        | Meaning                                                                                                                                        | Action                                                                                                                                                                                                                                          |
+|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `exposure alert` level=critical               | Unfinalized spendable exposure ≥ E_max for (chain, asset); spendability holds active — new credits post but are not spendable (risk-policy §4) | Expected self-protection. Confirm finalization is progressing (exposure drains). If it stays at cap, check scanner/re-checker health and consider raising N_finalize or the cap via config change. No ledger action needed — credits still post |
+| `exposure alert` level=warn                   | Exposure ≥ 80% of cap                                                                                                                          | Watch finalization rate vs deposit rate; prepare for holds                                                                                                                                                                                      |
+| `vault solvency discrepancy`                  | Custodian ledger total exceeds vault total for an asset (ADR 0004)                                                                             | Page immediately. Freeze new address issuance for that asset, reconcile custodian statements, treat as potential custodian insolvency                                                                                                           |
+| `credited_without_entry`                      | A deposit is CREDITED/FINALIZED/REVERSED with no credit ledger entry — a missed credit (primary correctness invariant)                         | Page. Inspect the deposit row and engine logs at credit time; the ledger must be repaired manually after root cause                                                                                                                             |
+| `ledger_balance_mismatch`                     | Ledger replay ≠ balance projection for an (account, asset)                                                                                     | Page. The projection is rebuildable: recompute from `ledger_entries` and correct `account_balances` in one transaction; investigate the write path that diverged                                                                                |
+| `reorg_resolution_lag`                        | Deposit still REORGED long past its reorg window                                                                                               | Scanner/re-checker stuck. Check its error log; on `ErrChainInconsistent` see cursor repair below                                                                                                                                                |
+| `scanner tick failed` repeating               | Node unreachable, DB error, or (rarely) chain inconsistency                                                                                    | Transient node errors self-heal. Persistent: check node RPC health, then DB connectivity                                                                                                                                                        |
+| `custodian claim contradicts chain, rejected` | Webhook/API claim does not match chain facts                                                                                                   | Normal in small numbers (provider quirks). A sustained rate means custodian data corruption — escalate to the provider                                                                                                                          |
+| account flagged (balance negative)            | A reversal exceeded the remaining balance (ADR 0002)                                                                                           | Expected after reorg-after-spend. Debits are blocked automatically. Ops: contact the user for top-up; the account unflags when the balance is non-negative again                                                                                |
 
 ## Scanner cursor repair (ErrChainInconsistent)
 
@@ -42,4 +42,10 @@ The rehearsal test `TestExpandContractMigrationUnderTraffic` (`internal/store/mi
 
 ## Configuration changes
 
-`asset_configs` rows are read per tick by scanner, re-checker, and monitor — changing `n_credit`, `n_finalize`, `reorg_window`, `exposure_cap`, or `tier_amount` takes effect without restart. Lowering `n_credit` or the cap applies to new evaluations only; already-credited deposits keep their state (finalize or reverse through the normal machine).
+The prototype reads `asset_configs` per tick, so changing `n_credit`,
+`n_finalize`, `reorg_window`, `exposure_cap`, or `tier_amount` takes effect
+without a process restart. This is not the production policy model: production
+must create an immutable policy revision, pin that revision on each new deposit,
+and activate it with an expand-and-contract rollout. Lowering a threshold or cap
+then affects only deposits pinned to the new revision; existing deposits retain
+the rules under which they were opened.
