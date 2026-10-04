@@ -66,13 +66,34 @@ func (t *Tx) DepositForUpdate(ctx context.Context, transferID string) (credit.Vi
 		return credit.View{}, fmt.Errorf("store: corrupt amount %q for %s", row.Amount, transferID)
 	}
 	return credit.View{
-		State:   deposit.State(row.State),
-		Chain:   row.Chain,
-		Account: row.Account,
-		Asset:   row.Asset,
-		Amount:  amount,
-		Held:    row.Held,
+		State:       deposit.State(row.State),
+		Chain:       row.Chain,
+		Account:     row.Account,
+		Asset:       row.Asset,
+		Amount:      amount,
+		Held:        row.Held,
+		CreditCycle: row.CreditCycle,
 	}, nil
+}
+
+func (t *Tx) SetReorgedHeight(ctx context.Context, transferID string, height uint64) error {
+	if err := t.tx.Deposit.Update().
+		Where(entdeposit.TransferID(transferID)).
+		SetReorgedHeight(int64(height)).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("store: set reorged height %s: %w", transferID, err)
+	}
+	return nil
+}
+
+func (t *Tx) SetCreditCycle(ctx context.Context, transferID string, cycle int) error {
+	if err := t.tx.Deposit.Update().
+		Where(entdeposit.TransferID(transferID)).
+		SetCreditCycle(cycle).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("store: set credit cycle %s: %w", transferID, err)
+	}
+	return nil
 }
 
 func (t *Tx) SetDepositState(ctx context.Context, transferID string, state deposit.State) error {

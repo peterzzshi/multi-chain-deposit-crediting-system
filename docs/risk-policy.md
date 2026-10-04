@@ -74,6 +74,8 @@ A monitor continuously computes $\sum (\text{spendable credited value of CREDITE
 - **Approaching the cap** (e.g., > 80%): alert.
 - **At or over the cap**: new credits still post to the ledger — the ledger must reflect chain facts — but their **spendability is held** until aggregate exposure falls back below the cap. Spendability is the controllable axis; confirmation/canonicality and spendability are deliberately separate ([../CONTEXT.md](../CONTEXT.md), "Available balance").
 
+Terminology and limits: $E_{\max}$ is a **spendability threshold, not a hard cap** — credits always post, so aggregate credited exposure can exceed $E_{\max}$; what the threshold bounds is *spendable* exposure. Enforcement is also **eventually consistent at the monitor boundary**: a credit racing the monitor acts on the last committed hold state, so the bound holds to within one monitor interval plus in-flight credits — absorbed by the safety factor $k$, not by tighter synchronization.
+
 Thresholds and dashboards are operational configuration, not design parameters.
 
 ## 4. Parameter values (every knob justified)

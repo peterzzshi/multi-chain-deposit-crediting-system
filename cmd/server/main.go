@@ -13,7 +13,9 @@ import (
 	"os"
 	"time"
 
+	"deposit-crediting/internal/adapters/chain"
 	"deposit-crediting/internal/adapters/chain/httpclient"
+	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/custodian"
 	"deposit-crediting/internal/errs"
@@ -35,6 +37,13 @@ func main() {
 	defer db.Close()
 	if err := db.Schema.Create(context.Background()); err != nil {
 		fatal("migrate schema", err)
+	}
+	assets, err := config.LoadAssets(env("ASSETS_CONFIG", "configs/assets.json"))
+	if err != nil {
+		fatal("load assets config", err)
+	}
+	if err := store.UpsertAssetConfigs(context.Background(), db, assets); err != nil {
+		fatal("apply assets config", err)
 	}
 
 	engine := credit.NewEngine(store.New(db))
@@ -67,6 +76,9 @@ type claimJSON struct {
 	To              string `json:"to"`
 	Asset           string `json:"asset"`
 	Amount          string `json:"amount"`
+	Kind            string `json:"kind,omitempty"`
+	LogIndex        *int   `json:"logIndex,omitempty"`
+	TraceIndex      *int   `json:"traceIndex,omitempty"`
 	ObservedAt      string `json:"observedAt"`
 }
 
@@ -93,7 +105,8 @@ func webhookHandler(ing *custodian.Ingestor) http.HandlerFunc {
 		}
 		err := ing.Handle(r.Context(), custodian.Claim{
 			ProviderEventID: cj.ProviderEventID, Chain: cj.Chain, TxHash: cj.TxHash,
-			To: cj.To, Asset: cj.Asset, Amount: amount, ObservedAt: observedAt,
+			To: cj.To, Asset: cj.Asset, Amount: amount, Kind: chain.TransferKind(cj.Kind),
+			LogIndex: cj.LogIndex, TraceIndex: cj.TraceIndex, ObservedAt: observedAt,
 		})
 		switch {
 		case err == nil:

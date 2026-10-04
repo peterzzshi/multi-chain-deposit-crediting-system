@@ -15,14 +15,16 @@ import (
 	"deposit-crediting/internal/errs"
 )
 
-// View is the engine's read model of a deposit row.
+// View is the engine's read model of a deposit row. CreditCycle is the
+// latest posted credit cycle; 0 is the original credit (ADR 0005).
 type View struct {
-	State   deposit.State
-	Chain   string
-	Account string
-	Asset   string
-	Amount  *big.Int
-	Held    bool
+	State       deposit.State
+	Chain       string
+	Account     string
+	Asset       string
+	Amount      *big.Int
+	Held        bool
+	CreditCycle int
 }
 
 // Balance is the locked account balance projection. Spendable funds are
@@ -55,6 +57,8 @@ type Tx interface {
 	// ClearHeld releases a held deposit: the deposit is spendable (or
 	// gone) and the amount leaves the held projection.
 	ClearHeld(ctx context.Context, transferID, account, asset string, amount *big.Int) error
+	SetReorgedHeight(ctx context.Context, transferID string, height uint64) error
+	SetCreditCycle(ctx context.Context, transferID string, cycle int) error
 }
 
 // Store is the persistence boundary the engine needs; implemented by
@@ -92,7 +96,7 @@ func (e *Engine) Apply(ctx context.Context, transferID string, ev deposit.Event)
 				return err
 			}
 		case deposit.EffectReverse:
-			original, err := ledger.New(ledger.Credit, dep.Account, dep.Asset, dep.Amount, transferID)
+			original, err := ledger.New(ledger.Credit, dep.Account, dep.Asset, dep.Amount, creditRef(transferID, dep.CreditCycle))
 			if err != nil {
 				return fmt.Errorf("credit: rebuild credit: %w", err)
 			}
@@ -118,11 +122,41 @@ func (e *Engine) Apply(ctx context.Context, transferID string, ev deposit.Event)
 	})
 }
 
-// creditFunds executes EffectCredit. A re-included transfer passes PENDING
-// again: an intact credit is a no-op; a reversed one opens a new credit
-// cycle, restoring the funds under a deterministic re-credit ref (ADR 0005).
-// Credits always post — an active exposure cap only holds spendability
-// (risk-policy §4).
+// ApplyReorg transitions a deposit to REORGED and sets its reorg-window
+// timestamp in one transaction — a crash cannot leave one without the other.
+func (e *Engine) ApplyReorg(ctx context.Context, transferID string, head uint64) error {
+	return e.store.InTx(ctx, func(ctx context.Context, tx Tx) error {
+		dep, err := tx.DepositForUpdate(ctx, transferID)
+		if err != nil {
+			return fmt.Errorf("credit: load deposit: %w", err)
+		}
+		next, _, err := deposit.Transition(dep.State, deposit.EventReorgedOut)
+		if err != nil {
+			return fmt.Errorf("credit: reorg out %s: %w", transferID, err)
+		}
+		if err := tx.SetReorgedHeight(ctx, transferID, head); err != nil {
+			return fmt.Errorf("credit: mark reorged %s: %w", transferID, err)
+		}
+		if err := tx.SetDepositState(ctx, transferID, next); err != nil {
+			return fmt.Errorf("credit: set state %s: %w", next, err)
+		}
+		return nil
+	})
+}
+
+// creditRef is the ledger ref of a credit cycle: the transfer ID for the
+// original credit, a derived ref for re-credits.
+func creditRef(transferID string, cycle int) string {
+	if cycle == 0 {
+		return transferID
+	}
+	return fmt.Sprintf("recredit:%s:%d", transferID, cycle)
+}
+
+// creditFunds executes EffectCredit. An intact latest-cycle credit is a
+// no-op; a reversed one re-credits under a new per-cycle ref, so repeated
+// reversal/re-credit cycles stay safe (ADR 0005). Credits always post —
+// an active exposure cap only holds spendability (risk-policy §4).
 func creditFunds(ctx context.Context, tx Tx, dep View, transferID string) error {
 	credited, err := tx.HasEntry(ctx, transferID)
 	if err != nil {
@@ -134,19 +168,22 @@ func creditFunds(ctx context.Context, tx Tx, dep View, transferID string) error 
 		}
 		return holdIfCapped(ctx, tx, dep, transferID)
 	}
-	reversed, err := tx.HasEntry(ctx, "reversal:"+transferID)
+	latest := creditRef(transferID, dep.CreditCycle)
+	reversed, err := tx.HasEntry(ctx, "reversal:"+latest)
 	if err != nil {
-		return fmt.Errorf("credit: check reversal %s: %w", transferID, err)
+		return fmt.Errorf("credit: check reversal %s: %w", latest, err)
 	}
 	if !reversed {
 		return nil
 	}
-	err = postNew(ctx, tx, ledger.Credit, dep, "recredit:"+transferID)
-	if errors.Is(err, errs.ErrDuplicateRef) {
+	cycle := dep.CreditCycle + 1
+	if err := postNew(ctx, tx, ledger.Credit, dep, creditRef(transferID, cycle)); errors.Is(err, errs.ErrDuplicateRef) {
 		return nil // re-credit already posted
-	}
-	if err != nil {
+	} else if err != nil {
 		return err
+	}
+	if err := tx.SetCreditCycle(ctx, transferID, cycle); err != nil {
+		return fmt.Errorf("credit: set credit cycle: %w", err)
 	}
 	return holdIfCapped(ctx, tx, dep, transferID)
 }

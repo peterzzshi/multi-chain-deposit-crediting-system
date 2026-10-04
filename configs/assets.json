@@ -1,0 +1,24 @@
+[
+  {
+    "chain": "stubchain",
+    "asset": "ETH",
+    "decimals": 18,
+    "mode": "self_built",
+    "min_amount": "100",
+    "n_credit": 2,
+    "n_finalize": 4,
+    "reorg_window": 3,
+    "exposure_cap": "5000",
+    "tier_amount": "2000"
+  },
+  {
+    "chain": "stubchain",
+    "asset": "USDT",
+    "decimals": 6,
+    "mode": "custodian",
+    "min_amount": "50",
+    "n_credit": 2,
+    "n_finalize": 4,
+    "reorg_window": 3
+  }
+]

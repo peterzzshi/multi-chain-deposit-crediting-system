@@ -64,10 +64,12 @@ type TxLocation struct {
 	Transfers []Transfer
 }
 
-// Client is the read model of a chain node.
+// Client is the read model of a chain node. Lookups return found=false
+// for "not canonical" (possible reorg evidence); err is reserved for
+// query failures, which callers must never treat as chain state.
 type Client interface {
 	Head(ctx context.Context) (uint64, error)
-	BlockHash(ctx context.Context, height uint64) (string, error)
+	BlockHash(ctx context.Context, height uint64) (hash string, found bool, err error)
 	Block(ctx context.Context, height uint64) (Block, error)
 	// TxByHash locates a transaction on the canonical chain; false means
 	// it is not (currently) canonical — never mined or reorged out.

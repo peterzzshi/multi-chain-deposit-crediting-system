@@ -65,8 +65,16 @@ func Handler(c *chaintest.Chain) http.Handler {
 		if !ok {
 			return
 		}
-		hash, err := c.BlockHash(r.Context(), height)
-		respond(w, hash, err)
+		hash, found, err := c.BlockHash(r.Context(), height)
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		if !found {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no canonical block at height"})
+			return
+		}
+		respond(w, hash, nil)
 	})
 
 	mux.HandleFunc("GET /v1/blocks/{height}", func(w http.ResponseWriter, r *http.Request) {

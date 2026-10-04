@@ -48,7 +48,9 @@ go run ./cmd/scanner                                          # self-built inges
 go run ./cmd/server                                           # :9200 webhooks/debits/reads
 CUSTODIAN_API_URL=http://localhost:9300 go run ./cmd/worker   # background loops
 
-# 3. Seed config + addresses (schema is created by any app binary on boot)
+# 3. Seed addresses (asset configs come from configs/assets.json — each
+#    app binary validates and applies it on boot; schema is created the
+#    same way)
 docker compose exec -T postgres psql -U postgres -d deposit_crediting < scripts/seed.sql
 
 # 4. Optional: clean slate between runs
@@ -56,7 +58,9 @@ docker compose exec -T postgres psql -U postgres -d deposit_crediting -c \
   "TRUNCATE ledger_entries, account_balances, deposits, source_events, canonical_blocks, chain_cursors, exposure_states;"
 ```
 
-Seeded world (chain `stubchain`):
+Supported assets live in `configs/assets.json` (validated and upserted by
+every binary at startup; edit the file and restart a binary to change
+policy). Seeded addresses come from `scripts/seed.sql`:
 
 | Account | Address | Mode | Asset | Min | n_credit | n_finalize | Reorg window |
 |---------|---------|------|-------|----:|---------:|-----------:|-------------:|

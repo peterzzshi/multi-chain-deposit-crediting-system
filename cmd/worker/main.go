@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"deposit-crediting/internal/adapters/chain/httpclient"
+	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/custodian"
 	"deposit-crediting/internal/custodian/httpprovider"
@@ -35,6 +36,13 @@ func main() {
 	defer db.Close()
 	if err := db.Schema.Create(context.Background()); err != nil {
 		fatal("migrate schema", err)
+	}
+	assets, err := config.LoadAssets(env("ASSETS_CONFIG", "configs/assets.json"))
+	if err != nil {
+		fatal("load assets config", err)
+	}
+	if err := store.UpsertAssetConfigs(context.Background(), db, assets); err != nil {
+		fatal("apply assets config", err)
 	}
 
 	chainClient := httpclient.New(env("CHAIN_API_URL", "http://localhost:9100"))

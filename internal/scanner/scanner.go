@@ -150,15 +150,19 @@ func (s *Scanner) Tick(ctx context.Context) error {
 	return s.expireReorged(ctx, head)
 }
 
-// rewindIfReorged compares the recorded tip against the canonical chain;
-// on mismatch it walks back to the fork, marks orphaned deposits REORGED,
-// and resets the cursor so the new branch is replayed.
+// rewindIfReorged walks back to the fork on a tip mismatch, transitions
+// orphaned deposits to REORGED, and resets the cursor for replay. Hash
+// lookup failures abort the tick without mutation — an RPC outage is not
+// reorg evidence.
 func (s *Scanner) rewindIfReorged(ctx context.Context, cursor *Cursor, head uint64) error {
 	if cursor.Hash == "" {
 		return nil
 	}
-	canonical, err := s.chain.BlockHash(ctx, cursor.Height)
-	if err == nil && canonical == cursor.Hash {
+	canonical, found, err := s.chain.BlockHash(ctx, cursor.Height)
+	if err != nil {
+		return fmt.Errorf("scanner: canonical hash at %d: %w", cursor.Height, err)
+	}
+	if found && canonical == cursor.Hash {
 		return nil
 	}
 	fork := cursor.Height
@@ -169,8 +173,11 @@ func (s *Scanner) rewindIfReorged(ctx context.Context, cursor *Cursor, head uint
 		if err != nil {
 			return fmt.Errorf("scanner: recorded hash at %d: %w", fork, err)
 		}
-		canonical, err := s.chain.BlockHash(ctx, fork)
+		canonical, found, err := s.chain.BlockHash(ctx, fork)
 		if err != nil {
+			return fmt.Errorf("scanner: canonical hash at %d: %w", fork, err)
+		}
+		if !found {
 			continue // beyond canonical head: still orphaned
 		}
 		if stored == "" || stored == canonical {
@@ -186,10 +193,7 @@ func (s *Scanner) rewindIfReorged(ctx context.Context, cursor *Cursor, head uint
 		if t.Height <= fork || t.Height > cursor.Height {
 			continue
 		}
-		if err := s.store.MarkReorged(ctx, t.TransferID, head); err != nil {
-			return fmt.Errorf("scanner: mark reorged %s: %w", t.TransferID, err)
-		}
-		if err := s.engine.Apply(ctx, t.TransferID, deposit.EventReorgedOut); err != nil {
+		if err := s.engine.ApplyReorg(ctx, t.TransferID, head); err != nil {
 			return fmt.Errorf("scanner: reorg out %s: %w", t.TransferID, err)
 		}
 	}
@@ -279,7 +283,7 @@ func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr chain.Tr
 	if err != nil {
 		return fmt.Errorf("scanner: deposit state %s: %w", transferID, err)
 	}
-	if state != deposit.StateReorged {
+	if state != deposit.StateReorged && state != deposit.StateReversed {
 		return nil // duplicate delivery on the canonical chain
 	}
 	if err := s.store.ReincludeDeposit(ctx, transferID, b.Height, b.Hash); err != nil {

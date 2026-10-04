@@ -49,9 +49,12 @@ func TestRoundtrip(t *testing.T) {
 		t.Fatalf("Head() = %d, %v; want 2, nil", head, err)
 	}
 
-	hash, err := client.BlockHash(ctx, 2)
-	if err != nil {
-		t.Fatalf("BlockHash() error: %v", err)
+	hash, found, err := client.BlockHash(ctx, 2)
+	if err != nil || !found {
+		t.Fatalf("BlockHash() = found %v, %v; want true, nil", found, err)
+	}
+	if _, found, err := client.BlockHash(ctx, 99); err != nil || found {
+		t.Errorf("BlockHash(99) = found %v, %v; want false, nil", found, err)
 	}
 	b, err := client.Block(ctx, 2)
 	if err != nil {
@@ -83,7 +86,7 @@ func TestReorgChangesHashes(t *testing.T) {
 
 	c.AddBlock()
 	c.AddBlock(chain.Transfer{Kind: chain.Native, TxHash: "0xt1", To: "0xaaa", Asset: "ETH", Amount: big.NewInt(100)})
-	before, err := client.BlockHash(ctx, 2)
+	before, _, err := client.BlockHash(ctx, 2)
 	if err != nil {
 		t.Fatalf("BlockHash() error: %v", err)
 	}
@@ -91,7 +94,7 @@ func TestReorgChangesHashes(t *testing.T) {
 	c.Reorg(1)
 	c.AddBlock() // replacement branch, no transfer
 
-	after, err := client.BlockHash(ctx, 2)
+	after, _, err := client.BlockHash(ctx, 2)
 	if err != nil {
 		t.Fatalf("BlockHash() after reorg error: %v", err)
 	}

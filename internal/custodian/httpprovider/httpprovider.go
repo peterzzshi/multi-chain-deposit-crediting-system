@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"time"
 
+	"deposit-crediting/internal/adapters/chain"
 	"deposit-crediting/internal/custodian"
 )
 
@@ -31,6 +32,9 @@ type claimJSON struct {
 	To              string `json:"to"`
 	Asset           string `json:"asset"`
 	Amount          string `json:"amount"`
+	Kind            string `json:"kind,omitempty"`
+	LogIndex        *int   `json:"logIndex,omitempty"`
+	TraceIndex      *int   `json:"traceIndex,omitempty"`
 	ObservedAt      string `json:"observedAt"`
 }
 
@@ -44,7 +48,8 @@ func (c claimJSON) claim() (custodian.Claim, error) {
 		return custodian.Claim{}, fmt.Errorf("httpprovider: bad observedAt %q", c.ObservedAt)
 	}
 	return custodian.Claim{ProviderEventID: c.ProviderEventID, Chain: c.Chain, TxHash: c.TxHash,
-		To: c.To, Asset: c.Asset, Amount: amount, ObservedAt: observedAt}, nil
+		To: c.To, Asset: c.Asset, Amount: amount, Kind: chain.TransferKind(c.Kind),
+		LogIndex: c.LogIndex, TraceIndex: c.TraceIndex, ObservedAt: observedAt}, nil
 }
 
 func (p *Provider) FetchDeposits(ctx context.Context, since time.Time) ([]custodian.Claim, error) {

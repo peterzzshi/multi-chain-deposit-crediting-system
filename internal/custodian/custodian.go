@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"time"
 
+	"deposit-crediting/internal/adapters/chain"
 	"deposit-crediting/internal/domain/deposit"
 )
 
@@ -21,7 +22,9 @@ type Config struct {
 }
 
 // Claim is one deposit as the custodian reports it, via webhook or query
-// API. Untrusted until verified on-chain.
+// API. Untrusted until verified on-chain. Kind/LogIndex/TraceIndex are
+// the provider's transfer discriminator; without them a claim is
+// ambiguous when one transaction carries several equal transfers.
 type Claim struct {
 	ProviderEventID string
 	Chain           string
@@ -29,6 +32,9 @@ type Claim struct {
 	To              string
 	Asset           string
 	Amount          *big.Int
+	Kind            chain.TransferKind
+	LogIndex        *int
+	TraceIndex      *int
 	ObservedAt      time.Time
 }
 
@@ -72,9 +78,12 @@ type Tracked struct {
 	BlockHash  string
 }
 
+// Reorged is a deposit whose inclusion left the canonical chain: REORGED
+// (window open) or REVERSED (still watched for re-inclusion, ADR 0005).
 type Reorged struct {
 	TransferID string
 	Asset      string
+	State      deposit.State
 	TxHash     string
 	Height     *uint64
 }

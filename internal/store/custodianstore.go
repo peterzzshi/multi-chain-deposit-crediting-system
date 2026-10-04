@@ -181,7 +181,7 @@ func (s *CustodianStore) ReorgedDeposits(ctx context.Context, chainID string) ([
 		Where(
 			entdeposit.Chain(chainID),
 			entdeposit.ModeEQ(entdeposit.ModeCustodian),
-			entdeposit.StateEQ(entdeposit.StateREORGED),
+			entdeposit.StateIn(entdeposit.StateREORGED, entdeposit.StateREVERSED),
 		).
 		All(ctx)
 	if err != nil {
@@ -189,7 +189,7 @@ func (s *CustodianStore) ReorgedDeposits(ctx context.Context, chainID string) ([
 	}
 	var reorged []custodian.Reorged
 	for _, r := range rows {
-		entry := custodian.Reorged{TransferID: r.TransferID, Asset: r.Asset}
+		entry := custodian.Reorged{TransferID: r.TransferID, Asset: r.Asset, State: deposit.State(r.State)}
 		if r.TxHash != nil {
 			entry.TxHash = *r.TxHash
 		}

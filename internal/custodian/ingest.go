@@ -98,11 +98,28 @@ func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
 	return nil
 }
 
+// matchTransfer returns the uniquely identified transfer: every field the
+// claim supplies must match, and exactly one candidate may remain —
+// an ambiguous claim never credits.
 func matchTransfer(transfers []chain.Transfer, cl Claim) (chain.Transfer, bool) {
+	var matches []chain.Transfer
 	for _, tr := range transfers {
-		if tr.To == cl.To && tr.Asset == cl.Asset && tr.Amount != nil && tr.Amount.Cmp(cl.Amount) == 0 {
-			return tr, true
+		if tr.To != cl.To || tr.Asset != cl.Asset || tr.Amount == nil || tr.Amount.Cmp(cl.Amount) != 0 {
+			continue
 		}
+		if cl.Kind != "" && tr.Kind != cl.Kind {
+			continue
+		}
+		if cl.LogIndex != nil && tr.LogIndex != *cl.LogIndex {
+			continue
+		}
+		if cl.TraceIndex != nil && tr.TraceIndex != *cl.TraceIndex {
+			continue
+		}
+		matches = append(matches, tr)
 	}
-	return chain.Transfer{}, false
+	if len(matches) != 1 {
+		return chain.Transfer{}, false
+	}
+	return matches[0], true
 }

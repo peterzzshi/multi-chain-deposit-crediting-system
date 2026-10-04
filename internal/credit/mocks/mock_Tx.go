@@ -541,6 +541,69 @@ func (_c *MockTx_SetBalance_Call) RunAndReturn(run func(ctx context.Context, acc
 	return _c
 }
 
+// SetCreditCycle provides a mock function for the type MockTx
+func (_mock *MockTx) SetCreditCycle(ctx context.Context, transferID string, cycle int) error {
+	ret := _mock.Called(ctx, transferID, cycle)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetCreditCycle")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) error); ok {
+		r0 = returnFunc(ctx, transferID, cycle)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockTx_SetCreditCycle_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetCreditCycle'
+type MockTx_SetCreditCycle_Call struct {
+	*mock.Call
+}
+
+// SetCreditCycle is a helper method to define mock.On call
+//   - ctx context.Context
+//   - transferID string
+//   - cycle int
+func (_e *MockTx_Expecter) SetCreditCycle(ctx any, transferID any, cycle any) *MockTx_SetCreditCycle_Call {
+	return &MockTx_SetCreditCycle_Call{Call: _e.mock.On("SetCreditCycle", ctx, transferID, cycle)}
+}
+
+func (_c *MockTx_SetCreditCycle_Call) Run(run func(ctx context.Context, transferID string, cycle int)) *MockTx_SetCreditCycle_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_SetCreditCycle_Call) Return(err error) *MockTx_SetCreditCycle_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockTx_SetCreditCycle_Call) RunAndReturn(run func(ctx context.Context, transferID string, cycle int) error) *MockTx_SetCreditCycle_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetDepositState provides a mock function for the type MockTx
 func (_mock *MockTx) SetDepositState(ctx context.Context, transferID string, state deposit.State) error {
 	ret := _mock.Called(ctx, transferID, state)
@@ -675,6 +738,69 @@ func (_c *MockTx_SetHeld_Call) Return(err error) *MockTx_SetHeld_Call {
 }
 
 func (_c *MockTx_SetHeld_Call) RunAndReturn(run func(ctx context.Context, transferID string, account string, asset string, amount *big.Int) error) *MockTx_SetHeld_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetReorgedHeight provides a mock function for the type MockTx
+func (_mock *MockTx) SetReorgedHeight(ctx context.Context, transferID string, height uint64) error {
+	ret := _mock.Called(ctx, transferID, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetReorgedHeight")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
+		r0 = returnFunc(ctx, transferID, height)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockTx_SetReorgedHeight_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetReorgedHeight'
+type MockTx_SetReorgedHeight_Call struct {
+	*mock.Call
+}
+
+// SetReorgedHeight is a helper method to define mock.On call
+//   - ctx context.Context
+//   - transferID string
+//   - height uint64
+func (_e *MockTx_Expecter) SetReorgedHeight(ctx any, transferID any, height any) *MockTx_SetReorgedHeight_Call {
+	return &MockTx_SetReorgedHeight_Call{Call: _e.mock.On("SetReorgedHeight", ctx, transferID, height)}
+}
+
+func (_c *MockTx_SetReorgedHeight_Call) Run(run func(ctx context.Context, transferID string, height uint64)) *MockTx_SetReorgedHeight_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_SetReorgedHeight_Call) Return(err error) *MockTx_SetReorgedHeight_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockTx_SetReorgedHeight_Call) RunAndReturn(run func(ctx context.Context, transferID string, height uint64) error) *MockTx_SetReorgedHeight_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -92,6 +92,17 @@ func (t *fakeTx) SetDepositState(_ context.Context, transferID string, state dep
 	return nil
 }
 
+func (t *fakeTx) SetReorgedHeight(_ context.Context, transferID string, height uint64) error {
+	return nil
+}
+
+func (t *fakeTx) SetCreditCycle(_ context.Context, transferID string, cycle int) error {
+	v := t.f.deposits[transferID]
+	v.CreditCycle = cycle
+	t.f.deposits[transferID] = v
+	return nil
+}
+
 func (t *fakeTx) InsertEntry(_ context.Context, e ledger.Entry) error {
 	for _, existing := range t.f.entries {
 		if existing.Ref == e.Ref {
@@ -243,43 +254,57 @@ func TestReincludeWithoutReversalDoesNotDoubleCredit(t *testing.T) {
 }
 
 // A transfer re-included after its credit was reversed opens a new credit
-// cycle: the re-credit entry restores the funds under a deterministic ref.
+// cycle under a per-cycle ref; repeated cycles keep restoring funds.
 func TestRecreditAfterReversalRestoresFunds(t *testing.T) {
 	store := newFakeStore()
 	store.seed(t, testTransfer, deposit.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	for _, ev := range []deposit.Event{
-		deposit.EventDepthReached,
+	cycle := []deposit.Event{
 		deposit.EventReorgedOut,
 		deposit.EventWindowExpiredCredited,
 		deposit.EventReincluded,
 		deposit.EventDepthReached,
-	} {
-		if err := engine.Apply(ctx, testTransfer, ev); err != nil {
-			t.Fatalf("Apply(%s) unexpected error: %v", ev, err)
+	}
+	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		for _, ev := range cycle {
+			if err := engine.Apply(ctx, testTransfer, ev); err != nil {
+				t.Fatalf("cycle %d: Apply(%s) unexpected error: %v", i+1, ev, err)
+			}
 		}
 	}
 	if got, want := store.deposits[testTransfer].State, deposit.StateCredited; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
-	if got, want := len(store.entries), 3; got != want {
-		t.Fatalf("entries = %d; want %d (credit, reversal, re-credit)", got, want)
+	if got, want := store.deposits[testTransfer].CreditCycle, 2; got != want {
+		t.Errorf("credit cycle = %d; want %d", got, want)
 	}
-	recredit := store.entries[2]
-	if recredit.Type != ledger.Credit || recredit.Ref != "recredit:"+testTransfer {
-		t.Errorf("re-credit = (%s, %s); want (%s, recredit:%s)",
-			recredit.Type, recredit.Ref, ledger.Credit, testTransfer)
+	if got, want := len(store.entries), 5; got != want {
+		t.Fatalf("entries = %d; want %d (two credit+reversal cycles, one original credit)", got, want)
+	}
+	for i, wantRef := range []string{
+		testTransfer,
+		"reversal:" + testTransfer,
+		"recredit:" + testTransfer + ":1",
+		"reversal:recredit:" + testTransfer + ":1",
+		"recredit:" + testTransfer + ":2",
+	} {
+		if got := store.entries[i].Ref; got != wantRef {
+			t.Errorf("entries[%d].Ref = %s; want %s", i, got, wantRef)
+		}
 	}
 	if got, want := store.balances["alice/ETH"].String(), "100"; got != want {
-		t.Errorf("balance = %s; want %s (reversal then re-credit)", got, want)
+		t.Errorf("balance = %s; want %s", got, want)
 	}
 
 	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) redelivery unexpected error: %v", err)
 	}
-	if got, want := len(store.entries), 3; got != want {
+	if got, want := len(store.entries), 5; got != want {
 		t.Errorf("entries after redelivery = %d; want %d", got, want)
 	}
 }

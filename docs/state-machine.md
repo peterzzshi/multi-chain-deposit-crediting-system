@@ -41,7 +41,7 @@ stateDiagram-v2
 
 - **No duplicate credit:** one row per logical transfer ID; the ledger credit carries a unique reference to it (ADR 0001).
 - **No missed credit:** every observed supported transfer opens a deposit; reconciliation backstops missed webhooks (ADR 0004).
-- **No credit survives a reorg:** `CREDITED` is non-terminal until the finality horizon; reversal is a compensating entry, never an edit (ADR 0002).
+- **No credit survives a reorg — within the observation horizon:** `CREDITED` is non-terminal until the finality horizon; reversal is a compensating entry, never an edit (ADR 0002). The guarantee is explicitly bounded: after `FINALIZED` the system stops watching, so a reorg deeper than `N_finalize` can leave a credit in place. That residual risk is accepted and priced by the exposure model ([risk-policy.md](risk-policy.md) §2), not eliminated.
 - `REORGED` is an observation state, not a money movement by itself.
 - A reversal the user already spent may drive the balance negative: the account is flagged and further debits blocked. That is a ledger/account concern, deliberately **not** a deposit state.
 - Spendability is a separate axis from these states: a deposit can be `CREDITED` while a hold (large-tier policy, exposure cap) keeps part of it non-spendable.

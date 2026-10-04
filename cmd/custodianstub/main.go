@@ -13,6 +13,7 @@ import (
 	"os"
 	"time"
 
+	"deposit-crediting/internal/adapters/chain"
 	"deposit-crediting/internal/custodian"
 	"deposit-crediting/internal/custodian/custodiantest"
 )
@@ -24,12 +25,16 @@ type claimJSON struct {
 	To              string `json:"to"`
 	Asset           string `json:"asset"`
 	Amount          string `json:"amount"`
+	Kind            string `json:"kind,omitempty"`
+	LogIndex        *int   `json:"logIndex,omitempty"`
+	TraceIndex      *int   `json:"traceIndex,omitempty"`
 	ObservedAt      string `json:"observedAt"`
 }
 
 func toJSON(cl custodian.Claim) claimJSON {
 	return claimJSON{ProviderEventID: cl.ProviderEventID, Chain: cl.Chain, TxHash: cl.TxHash,
-		To: cl.To, Asset: cl.Asset, Amount: cl.Amount.String(),
+		To: cl.To, Asset: cl.Asset, Amount: cl.Amount.String(), Kind: string(cl.Kind),
+		LogIndex: cl.LogIndex, TraceIndex: cl.TraceIndex,
 		ObservedAt: cl.ObservedAt.UTC().Format(time.RFC3339)}
 }
 
@@ -47,7 +52,8 @@ func fromJSON(cj claimJSON) (custodian.Claim, error) {
 		observedAt = parsed
 	}
 	return custodian.Claim{ProviderEventID: cj.ProviderEventID, Chain: cj.Chain, TxHash: cj.TxHash,
-		To: cj.To, Asset: cj.Asset, Amount: amount, ObservedAt: observedAt}, nil
+		To: cj.To, Asset: cj.Asset, Amount: amount, Kind: chain.TransferKind(cj.Kind),
+		LogIndex: cj.LogIndex, TraceIndex: cj.TraceIndex, ObservedAt: observedAt}, nil
 }
 
 type errString string

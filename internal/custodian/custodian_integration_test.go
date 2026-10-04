@@ -425,3 +425,79 @@ func TestCustodianReincludeKeepsSingleCredit(t *testing.T) {
 		t.Errorf("balance = %s; want 100", got)
 	}
 }
+
+// A BlockHash outage must not be read as reorg evidence: the tick fails
+// without touching deposits, and recovers when the node is back.
+func TestRecheckerBlockHashOutageDoesNotMutate(t *testing.T) {
+	f := newFixture(t)
+	f.observeChainDeposit(testTxHash, 100)
+	f.handle(f.cust.Webhooks()...)
+	if got := f.state(testTrans); got != deposit.StatePending {
+		t.Fatalf("state = %s; want PENDING", got)
+	}
+
+	f.chain.BlockHashErr = errors.New("rpc timeout")
+	if err := f.recheck.Tick(f.ctx); err == nil {
+		t.Fatal("Rechecker.Tick() during outage = nil error; want error")
+	}
+	if got := f.state(testTrans); got != deposit.StatePending {
+		t.Errorf("state during outage = %s; want PENDING (no reorg mutation)", got)
+	}
+	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(testTrans)).Only(f.ctx)
+	if err != nil {
+		t.Fatalf("query deposit: %v", err)
+	}
+	if row.ReorgedHeight != nil {
+		t.Errorf("reorged height set during outage; want NULL")
+	}
+
+	f.chain.BlockHashErr = nil
+	f.addBlocks(2)
+	f.recheckTick()
+	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+		t.Errorf("state after recovery = %s; want %s", got, want)
+	}
+}
+
+// A custodian deposit reversed after the window is still watched: the
+// re-checker finds the re-included transaction via TxByHash and opens a
+// new credit cycle (ADR 0005).
+func TestCustodianReinclusionAfterReversalOpensNewCycle(t *testing.T) {
+	f := newFixture(t)
+	f.observeChainDeposit(testTxHash, 100)
+	f.handle(f.cust.Webhooks()...)
+	f.addBlocks(2)
+	f.recheckTick()
+	if got := f.state(testTrans); got != deposit.StateCredited {
+		t.Fatalf("state = %s; want CREDITED", got)
+	}
+
+	f.chain.Reorg(3)
+	f.addBlocks(3)
+	f.recheckTick()
+	f.addBlocks(4) // window (4) elapses
+	f.recheckTick()
+	if got, want := f.state(testTrans), deposit.StateReversed; got != want {
+		t.Fatalf("state = %s; want %s", got, want)
+	}
+	if got, _ := f.balance(); got != "0" {
+		t.Fatalf("balance after reversal = %s; want 0", got)
+	}
+
+	f.chain.AddBlock(chain.Transfer{Kind: chain.Native, TxHash: testTxHash, From: "0xexternal", To: aliceAddr, Asset: "ETH", Amount: big.NewInt(100)})
+	f.recheckTick()
+	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+		t.Fatalf("state after re-inclusion = %s; want %s", got, want)
+	}
+	f.addBlocks(3)
+	f.recheckTick()
+	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+		t.Fatalf("state after new cycle depth = %s; want %s", got, want)
+	}
+	if got := f.entryCount(); got != 3 {
+		t.Errorf("entries = %d; want 3 (credit, reversal, re-credit)", got)
+	}
+	if got, _ := f.balance(); got != "100" {
+		t.Errorf("balance = %s; want 100 (re-credit restored funds)", got)
+	}
+}

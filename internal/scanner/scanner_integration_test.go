@@ -123,6 +123,95 @@ func (f *fixture) entryRefs() []string {
 	return refs
 }
 
+// A BlockHash outage must not be read as reorg evidence: the tick fails
+// without touching deposits or the cursor, and recovers when the node is
+// back.
+func TestScannerBlockHashOutageDoesNotMutate(t *testing.T) {
+	f := newFixture(t)
+	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
+	f.tick()
+	if got := f.state(testTransID); got != deposit.StatePending {
+		t.Fatalf("state = %s; want PENDING", got)
+	}
+
+	f.chain.BlockHashErr = errors.New("rpc timeout")
+	if err := f.sc.Tick(f.ctx); err == nil {
+		t.Fatal("Tick() during outage = nil error; want error")
+	}
+	if got := f.state(testTransID); got != deposit.StatePending {
+		t.Errorf("state during outage = %s; want PENDING (no reorg mutation)", got)
+	}
+	cursor, _, err := store.NewScannerStore(f.client).Cursor(f.ctx, chainID)
+	if err != nil {
+		t.Fatalf("Cursor() error: %v", err)
+	}
+	if got, want := cursor.Height, uint64(1); got != want {
+		t.Errorf("cursor height = %d; want %d (no advance)", got, want)
+	}
+
+	f.chain.BlockHashErr = nil
+	f.addBlocks(2)
+	f.tick()
+	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+		t.Errorf("state after recovery = %s; want %s", got, want)
+	}
+}
+
+// A transfer re-included after its credit was reversed opens a new credit
+// cycle: PENDING again, re-credited under a per-cycle ref (ADR 0005).
+func TestScannerReinclusionAfterReversalOpensNewCycle(t *testing.T) {
+	f := newFixture(t)
+	f.chain.AddBlock()
+	f.chain.AddBlock()
+	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
+	f.addBlocks(2)
+	f.tick()
+	if got := f.state(testTransID); got != deposit.StateCredited {
+		t.Fatalf("state = %s; want CREDITED", got)
+	}
+
+	f.chain.Reorg(3)
+	f.addBlocks(3)
+	f.tick()
+	f.addBlocks(4) // window (4) elapses
+	f.tick()
+	if got, want := f.state(testTransID), deposit.StateReversed; got != want {
+		t.Fatalf("state = %s; want %s", got, want)
+	}
+
+	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100)) // re-mined on the canonical branch
+	f.tick()
+	if got, want := f.state(testTransID), deposit.StatePending; got != want {
+		t.Fatalf("state after re-inclusion = %s; want %s", got, want)
+	}
+	f.addBlocks(2)
+	f.tick()
+	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+		t.Fatalf("state after new cycle depth = %s; want %s", got, want)
+	}
+
+	wantRefs := []string{testTransID, "reversal:" + testTransID, "recredit:" + testTransID + ":1"}
+	got := f.entryRefs()
+	if len(got) != len(wantRefs) {
+		t.Fatalf("entries = %v; want %v", got, wantRefs)
+	}
+	for i, want := range wantRefs {
+		if got[i] != want {
+			t.Errorf("entries[%d] = %s; want %s", i, got[i], want)
+		}
+	}
+	if balance, _ := f.balance("alice", "ETH"); balance != "100" {
+		t.Errorf("balance = %s; want 100 (re-credit restored funds)", balance)
+	}
+	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(testTransID)).Only(f.ctx)
+	if err != nil {
+		t.Fatalf("query deposit: %v", err)
+	}
+	if got, want := row.CreditCycle, 1; got != want {
+		t.Errorf("credit cycle = %d; want %d", got, want)
+	}
+}
+
 // A reorg landing between the reorg check and the block fetch makes the
 // next block not extend the cursor. Tick reports ErrChainInconsistent
 // without advancing the cursor, and Run stops instead of retrying forever.

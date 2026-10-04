@@ -69,12 +69,13 @@ func (r *Rechecker) verifyTracked(ctx context.Context, head uint64, configs map[
 		if !ok || d.Height > head {
 			continue
 		}
-		canonical, err := r.chain.BlockHash(ctx, d.Height)
-		if err != nil || canonical != d.BlockHash {
-			if err := r.store.MarkReorged(ctx, d.TransferID, head); err != nil {
-				return fmt.Errorf("rechecker: mark reorged %s: %w", d.TransferID, err)
-			}
-			if err := r.engine.Apply(ctx, d.TransferID, deposit.EventReorgedOut); err != nil {
+		canonical, found, err := r.chain.BlockHash(ctx, d.Height)
+		if err != nil {
+			// RPC failure is not reorg evidence — no mutation, retry next tick.
+			return fmt.Errorf("rechecker: canonical hash at %d: %w", d.Height, err)
+		}
+		if !found || canonical != d.BlockHash {
+			if err := r.engine.ApplyReorg(ctx, d.TransferID, head); err != nil {
 				return fmt.Errorf("rechecker: reorg out %s: %w", d.TransferID, err)
 			}
 			continue
@@ -115,9 +116,11 @@ func (r *Rechecker) resolveReorged(ctx context.Context, head uint64, configs map
 				continue
 			}
 		}
+		if d.State == deposit.StateReversed {
+			continue // terminal unless re-included; no second expiry
+		}
 		if d.Height == nil {
-			// Crash between the state change and the mark: restart the
-			// window now.
+			// Rows from before atomic reorg marking: restart the window.
 			if err := r.store.MarkReorged(ctx, d.TransferID, head); err != nil {
 				return fmt.Errorf("rechecker: repair reorg mark %s: %w", d.TransferID, err)
 			}

@@ -17,10 +17,12 @@ type Chain struct {
 	branch int
 	blocks []chain.Block
 
-	// BeforeBlock runs before each Block call, outside the lock. It exists
-	// to inject mid-tick races (e.g. corrupting the chain between the
-	// scanner's reorg check and its block fetch).
+	// BeforeBlock runs before each Block call, outside the lock, to
+	// inject mid-tick races.
 	BeforeBlock func(height uint64)
+	// BlockHashErr fails every BlockHash call when non-nil (RPC outage
+	// injection).
+	BlockHashErr error
 }
 
 func NewChain() *Chain {
@@ -76,13 +78,16 @@ func (c *Chain) Head(_ context.Context) (uint64, error) {
 	return uint64(len(c.blocks)), nil
 }
 
-func (c *Chain) BlockHash(_ context.Context, height uint64) (string, error) {
+func (c *Chain) BlockHash(_ context.Context, height uint64) (string, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if height == 0 || height > uint64(len(c.blocks)) {
-		return "", fmt.Errorf("chaintest: no canonical block at height %d", height)
+	if c.BlockHashErr != nil {
+		return "", false, c.BlockHashErr
 	}
-	return c.blocks[height-1].Hash, nil
+	if height == 0 || height > uint64(len(c.blocks)) {
+		return "", false, nil
+	}
+	return c.blocks[height-1].Hash, true, nil
 }
 
 func (c *Chain) Block(_ context.Context, height uint64) (chain.Block, error) {

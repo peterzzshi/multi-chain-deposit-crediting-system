@@ -48,9 +48,16 @@ func (c *Client) Head(ctx context.Context) (uint64, error) {
 	return head, c.get(ctx, "/v1/head", &head)
 }
 
-func (c *Client) BlockHash(ctx context.Context, height uint64) (string, error) {
+func (c *Client) BlockHash(ctx context.Context, height uint64) (string, bool, error) {
 	var hash string
-	return hash, c.get(ctx, fmt.Sprintf("/v1/blocks/%d/hash", height), &hash)
+	status, err := c.getRaw(ctx, fmt.Sprintf("/v1/blocks/%d/hash", height), &hash)
+	if err != nil {
+		return "", false, err
+	}
+	if status == http.StatusNotFound {
+		return "", false, nil
+	}
+	return hash, true, nil
 }
 
 func (c *Client) Block(ctx context.Context, height uint64) (chain.Block, error) {
