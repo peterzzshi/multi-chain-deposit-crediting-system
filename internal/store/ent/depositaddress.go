@@ -22,8 +22,6 @@ type DepositAddress struct {
 	Chain string `json:"chain,omitempty"`
 	// Address holds the value of the "address" field.
 	Address string `json:"address,omitempty"`
-	// Mode holds the value of the "mode" field.
-	Mode depositaddress.Mode `json:"mode,omitempty"`
 	// Active holds the value of the "active" field.
 	Active       bool `json:"active,omitempty"`
 	selectValues sql.SelectValues
@@ -38,7 +36,7 @@ func (*DepositAddress) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case depositaddress.FieldID:
 			values[i] = new(sql.NullInt64)
-		case depositaddress.FieldAccount, depositaddress.FieldChain, depositaddress.FieldAddress, depositaddress.FieldMode:
+		case depositaddress.FieldAccount, depositaddress.FieldChain, depositaddress.FieldAddress:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -78,12 +76,6 @@ func (_m *DepositAddress) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field address", values[i])
 			} else if value.Valid {
 				_m.Address = value.String
-			}
-		case depositaddress.FieldMode:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field mode", values[i])
-			} else if value.Valid {
-				_m.Mode = depositaddress.Mode(value.String)
 			}
 		case depositaddress.FieldActive:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -135,9 +127,6 @@ func (_m *DepositAddress) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("address=")
 	builder.WriteString(_m.Address)
-	builder.WriteString(", ")
-	builder.WriteString("mode=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Mode))
 	builder.WriteString(", ")
 	builder.WriteString("active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Active))

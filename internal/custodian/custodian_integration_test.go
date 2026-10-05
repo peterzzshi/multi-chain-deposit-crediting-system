@@ -14,17 +14,15 @@ import (
 	"testing"
 	"time"
 
-	"deposit-crediting/internal/adapters/chain"
-	"deposit-crediting/internal/adapters/chain/chaintest"
+	"deposit-crediting/internal/adapters"
+	chaintest "deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/custodian"
-	"deposit-crediting/internal/custodian/custodiantest"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-	"deposit-crediting/internal/store/storetest"
 )
 
 const (
@@ -41,8 +39,8 @@ type fixture struct {
 	ctx     context.Context
 	client  *ent.Client
 	engine  *credit.Engine
-	chain   *chaintest.Chain
-	cust    *custodiantest.Custodian
+	chain   *adapters.Chain
+	cust    *custodian.MockCustodian
 	ing     *custodian.Ingestor
 	recheck *custodian.Rechecker
 	recon   *custodian.Reconciler
@@ -50,8 +48,8 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	client := storetest.OpenDB(t)
-	f := &fixture{t: t, ctx: context.Background(), client: client, chain: chaintest.NewChain(), cust: custodiantest.New()}
+	client := store.OpenDB(t)
+	f := &fixture{t: t, ctx: context.Background(), client: client, chain: adapters.NewChain(), cust: custodian.New()}
 	f.engine = credit.NewEngine(store.New(f.client))
 	cstore := store.NewCustodianStore(f.client)
 	cfg := custodian.Config{ChainID: chainID, Provider: provider}
@@ -66,7 +64,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("seed asset config: %v", err)
 	}
 	if _, err := f.client.DepositAddress.Create().
-		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).SetMode("custodian").
+		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).
 		Save(f.ctx); err != nil {
 		t.Fatalf("seed address: %v", err)
 	}
@@ -75,7 +73,7 @@ func newFixture(t *testing.T) *fixture {
 
 // observeChainDeposit puts the transfer on-chain and registers the
 // custodian's claim for it.
-func (f *fixture) observeChainDeposit(txHash string, amount int64, opts ...custodiantest.ObserveOption) custodian.Claim {
+func (f *fixture) observeChainDeposit(txHash string, amount int64, opts ...custodian.ObserveOption) custodian.Claim {
 	f.t.Helper()
 	f.chain.AddBlock(chain.Transfer{Kind: chain.Native, TxHash: txHash, From: "0xexternal", To: aliceAddr, Asset: "ETH", Amount: big.NewInt(amount)})
 	cl := custodian.Claim{
@@ -114,13 +112,13 @@ func (f *fixture) recheckTick() {
 	}
 }
 
-func (f *fixture) state(transferID string) deposit.State {
+func (f *fixture) state(transferID string) domain.State {
 	f.t.Helper()
-	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(transferID)).Only(f.ctx)
+	row, err := f.client.Deposit.Query().Where(entdomain.TransferID(transferID)).Only(f.ctx)
 	if err != nil {
 		f.t.Fatalf("query deposit %s: %v", transferID, err)
 	}
-	return deposit.State(row.State)
+	return domain.State(row.State)
 }
 
 func (f *fixture) depositCount() int {
@@ -163,19 +161,19 @@ func TestCustodianClaimCreditsAndFinalizes(t *testing.T) {
 	f := newFixture(t)
 	f.observeChainDeposit(testTxHash, 100)
 	f.handle(f.cust.Webhooks()...)
-	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+	if got, want := f.state(testTrans), domain.StatePending; got != want {
 		t.Fatalf("state after webhook = %s; want %s", got, want)
 	}
 
 	f.addBlocks(2) // head 3: depth 3 >= N_credit
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+	if got, want := f.state(testTrans), domain.StateCredited; got != want {
 		t.Fatalf("state at N_credit = %s; want %s", got, want)
 	}
 
 	f.addBlocks(2) // head 5: depth 5 >= N_finalize
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateFinalized; got != want {
+	if got, want := f.state(testTrans), domain.StateFinalized; got != want {
 		t.Fatalf("state at N_finalize = %s; want %s", got, want)
 	}
 	if got := f.entryCount(); got != 1 {
@@ -191,7 +189,7 @@ func TestCustodianClaimCreditsAndFinalizes(t *testing.T) {
 
 func TestCustodianDuplicateAndRenamedDeliveries(t *testing.T) {
 	f := newFixture(t)
-	f.observeChainDeposit(testTxHash, 100, custodiantest.Duplicate())
+	f.observeChainDeposit(testTxHash, 100, custodian.Duplicate())
 	f.handle(f.cust.Webhooks()...) // same provider event ID twice
 
 	// Same transfer reported again under a NEW provider event ID: the
@@ -225,7 +223,7 @@ func TestCustodianDuplicateAndRenamedDeliveries(t *testing.T) {
 
 func TestCustodianDroppedWebhookRecoveredByReconciliation(t *testing.T) {
 	f := newFixture(t)
-	f.observeChainDeposit(testTxHash, 100, custodiantest.Dropped())
+	f.observeChainDeposit(testTxHash, 100, custodian.Dropped())
 	if got := f.cust.Webhooks(); len(got) != 0 {
 		t.Fatalf("webhooks = %d; want 0 (dropped)", len(got))
 	}
@@ -236,7 +234,7 @@ func TestCustodianDroppedWebhookRecoveredByReconciliation(t *testing.T) {
 	if err := f.recon.Tick(f.ctx); err != nil {
 		t.Fatalf("Reconciler.Tick() unexpected error: %v", err)
 	}
-	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+	if got, want := f.state(testTrans), domain.StatePending; got != want {
 		t.Fatalf("state after reconciliation = %s; want %s", got, want)
 	}
 	if got := f.sourceEventCount(); got != 1 {
@@ -244,7 +242,7 @@ func TestCustodianDroppedWebhookRecoveredByReconciliation(t *testing.T) {
 	}
 
 	// A delayed delivery of the same claim afterwards is a no-op.
-	f.observeChainDeposit("0xctx2", 50, custodiantest.Delayed())
+	f.observeChainDeposit("0xctx2", 50, custodian.Delayed())
 	f.cust.ReleaseDelayed()
 	f.handle(f.cust.Webhooks()...)
 	if got := f.depositCount(); got != 2 {
@@ -297,7 +295,7 @@ func TestCustodianNodeLagClaimRetriedByReconciliation(t *testing.T) {
 		ProviderEventID: "ev-lag", Chain: chainID, TxHash: testTxHash,
 		To: aliceAddr, Asset: "ETH", Amount: big.NewInt(100), ObservedAt: time.Now(),
 	}
-	f.cust.Observe(lagged, custodiantest.Dropped())
+	f.cust.Observe(lagged, custodian.Dropped())
 	if err := f.recon.Tick(f.ctx); err != nil {
 		t.Fatalf("Reconciler.Tick() with unmined claim error = %v; want nil (skipped)", err)
 	}
@@ -310,7 +308,7 @@ func TestCustodianNodeLagClaimRetriedByReconciliation(t *testing.T) {
 	if err := f.recon.Tick(f.ctx); err != nil {
 		t.Fatalf("Reconciler.Tick() after mining unexpected error: %v", err)
 	}
-	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+	if got, want := f.state(testTrans), domain.StatePending; got != want {
 		t.Fatalf("state after retry = %s; want %s", got, want)
 	}
 }
@@ -361,7 +359,7 @@ func TestCustodianReorgReversesAfterSpend(t *testing.T) {
 	f.handle(f.cust.Webhooks()...)
 	f.addBlocks(2)
 	f.recheckTick()
-	if got := f.state(testTrans); got != deposit.StateCredited {
+	if got := f.state(testTrans); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 	if err := f.engine.Debit(f.ctx, "alice", "ETH", big.NewInt(70), "withdrawal:1"); err != nil {
@@ -372,13 +370,13 @@ func TestCustodianReorgReversesAfterSpend(t *testing.T) {
 	f.chain.Reorg(3)
 	f.addBlocks(3)
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateReorged; got != want {
+	if got, want := f.state(testTrans), domain.StateReorged; got != want {
 		t.Fatalf("state after reorg = %s; want %s", got, want)
 	}
 
 	f.addBlocks(4) // reorg window (4) elapsed, never re-included
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateReversed; got != want {
+	if got, want := f.state(testTrans), domain.StateReversed; got != want {
 		t.Fatalf("state after window = %s; want %s", got, want)
 	}
 	bal, flagged := f.balance()
@@ -393,7 +391,7 @@ func TestCustodianReincludeKeepsSingleCredit(t *testing.T) {
 	f.handle(f.cust.Webhooks()...)
 	f.addBlocks(2)
 	f.recheckTick()
-	if got := f.state(testTrans); got != deposit.StateCredited {
+	if got := f.state(testTrans); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 
@@ -401,7 +399,7 @@ func TestCustodianReincludeKeepsSingleCredit(t *testing.T) {
 	f.chain.Reorg(3)
 	f.addBlocks(3)
 	f.recheckTick()
-	if got := f.state(testTrans); got != deposit.StateReorged {
+	if got := f.state(testTrans); got != domain.StateReorged {
 		t.Fatalf("state after reorg = %s; want REORGED", got)
 	}
 
@@ -409,13 +407,13 @@ func TestCustodianReincludeKeepsSingleCredit(t *testing.T) {
 	// via TxByHash and re-opens the credit cycle without double-crediting.
 	f.chain.AddBlock(chain.Transfer{Kind: chain.Native, TxHash: testTxHash, From: "0xexternal", To: aliceAddr, Asset: "ETH", Amount: big.NewInt(100)})
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+	if got, want := f.state(testTrans), domain.StatePending; got != want {
 		t.Fatalf("state after re-inclusion = %s; want %s", got, want)
 	}
 
 	f.addBlocks(3)
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+	if got, want := f.state(testTrans), domain.StateCredited; got != want {
 		t.Fatalf("state after re-credit depth = %s; want %s", got, want)
 	}
 	if got := f.entryCount(); got != 1 {
@@ -432,7 +430,7 @@ func TestRecheckerBlockHashOutageDoesNotMutate(t *testing.T) {
 	f := newFixture(t)
 	f.observeChainDeposit(testTxHash, 100)
 	f.handle(f.cust.Webhooks()...)
-	if got := f.state(testTrans); got != deposit.StatePending {
+	if got := f.state(testTrans); got != domain.StatePending {
 		t.Fatalf("state = %s; want PENDING", got)
 	}
 
@@ -440,10 +438,10 @@ func TestRecheckerBlockHashOutageDoesNotMutate(t *testing.T) {
 	if err := f.recheck.Tick(f.ctx); err == nil {
 		t.Fatal("Rechecker.Tick() during outage = nil error; want error")
 	}
-	if got := f.state(testTrans); got != deposit.StatePending {
+	if got := f.state(testTrans); got != domain.StatePending {
 		t.Errorf("state during outage = %s; want PENDING (no reorg mutation)", got)
 	}
-	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(testTrans)).Only(f.ctx)
+	row, err := f.client.Deposit.Query().Where(entdomain.TransferID(testTrans)).Only(f.ctx)
 	if err != nil {
 		t.Fatalf("query deposit: %v", err)
 	}
@@ -454,7 +452,7 @@ func TestRecheckerBlockHashOutageDoesNotMutate(t *testing.T) {
 	f.chain.BlockHashErr = nil
 	f.addBlocks(2)
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+	if got, want := f.state(testTrans), domain.StateCredited; got != want {
 		t.Errorf("state after recovery = %s; want %s", got, want)
 	}
 }
@@ -468,7 +466,7 @@ func TestCustodianReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 	f.handle(f.cust.Webhooks()...)
 	f.addBlocks(2)
 	f.recheckTick()
-	if got := f.state(testTrans); got != deposit.StateCredited {
+	if got := f.state(testTrans); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 
@@ -477,7 +475,7 @@ func TestCustodianReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 	f.recheckTick()
 	f.addBlocks(4) // window (4) elapses
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateReversed; got != want {
+	if got, want := f.state(testTrans), domain.StateReversed; got != want {
 		t.Fatalf("state = %s; want %s", got, want)
 	}
 	if got, _ := f.balance(); got != "0" {
@@ -486,12 +484,12 @@ func TestCustodianReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 
 	f.chain.AddBlock(chain.Transfer{Kind: chain.Native, TxHash: testTxHash, From: "0xexternal", To: aliceAddr, Asset: "ETH", Amount: big.NewInt(100)})
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StatePending; got != want {
+	if got, want := f.state(testTrans), domain.StatePending; got != want {
 		t.Fatalf("state after re-inclusion = %s; want %s", got, want)
 	}
 	f.addBlocks(3)
 	f.recheckTick()
-	if got, want := f.state(testTrans), deposit.StateCredited; got != want {
+	if got, want := f.state(testTrans), domain.StateCredited; got != want {
 		t.Fatalf("state after new cycle depth = %s; want %s", got, want)
 	}
 	if got := f.entryCount(); got != 3 {

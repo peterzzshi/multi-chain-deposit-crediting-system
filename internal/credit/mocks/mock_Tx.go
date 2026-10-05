@@ -7,8 +7,7 @@ package mocks
 import (
 	"context"
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/domain/ledger"
+	"deposit-crediting/internal/domain"
 	"math/big"
 
 	mock "github.com/stretchr/testify/mock"
@@ -410,7 +409,7 @@ func (_c *MockTx_HoldsActive_Call) RunAndReturn(run func(ctx context.Context, ch
 }
 
 // InsertEntry provides a mock function for the type MockTx
-func (_mock *MockTx) InsertEntry(ctx context.Context, e ledger.Entry) error {
+func (_mock *MockTx) InsertEntry(ctx context.Context, e domain.Entry) error {
 	ret := _mock.Called(ctx, e)
 
 	if len(ret) == 0 {
@@ -418,7 +417,7 @@ func (_mock *MockTx) InsertEntry(ctx context.Context, e ledger.Entry) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, ledger.Entry) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.Entry) error); ok {
 		r0 = returnFunc(ctx, e)
 	} else {
 		r0 = ret.Error(0)
@@ -433,20 +432,20 @@ type MockTx_InsertEntry_Call struct {
 
 // InsertEntry is a helper method to define mock.On call
 //   - ctx context.Context
-//   - e ledger.Entry
+//   - e domain.Entry
 func (_e *MockTx_Expecter) InsertEntry(ctx any, e any) *MockTx_InsertEntry_Call {
 	return &MockTx_InsertEntry_Call{Call: _e.mock.On("InsertEntry", ctx, e)}
 }
 
-func (_c *MockTx_InsertEntry_Call) Run(run func(ctx context.Context, e ledger.Entry)) *MockTx_InsertEntry_Call {
+func (_c *MockTx_InsertEntry_Call) Run(run func(ctx context.Context, e domain.Entry)) *MockTx_InsertEntry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 ledger.Entry
+		var arg1 domain.Entry
 		if args[1] != nil {
-			arg1 = args[1].(ledger.Entry)
+			arg1 = args[1].(domain.Entry)
 		}
 		run(
 			arg0,
@@ -461,7 +460,7 @@ func (_c *MockTx_InsertEntry_Call) Return(err error) *MockTx_InsertEntry_Call {
 	return _c
 }
 
-func (_c *MockTx_InsertEntry_Call) RunAndReturn(run func(ctx context.Context, e ledger.Entry) error) *MockTx_InsertEntry_Call {
+func (_c *MockTx_InsertEntry_Call) RunAndReturn(run func(ctx context.Context, e domain.Entry) error) *MockTx_InsertEntry_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -605,7 +604,7 @@ func (_c *MockTx_SetCreditCycle_Call) RunAndReturn(run func(ctx context.Context,
 }
 
 // SetDepositState provides a mock function for the type MockTx
-func (_mock *MockTx) SetDepositState(ctx context.Context, transferID string, state deposit.State) error {
+func (_mock *MockTx) SetDepositState(ctx context.Context, transferID string, state domain.State) error {
 	ret := _mock.Called(ctx, transferID, state)
 
 	if len(ret) == 0 {
@@ -613,7 +612,7 @@ func (_mock *MockTx) SetDepositState(ctx context.Context, transferID string, sta
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, deposit.State) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, domain.State) error); ok {
 		r0 = returnFunc(ctx, transferID, state)
 	} else {
 		r0 = ret.Error(0)
@@ -629,12 +628,12 @@ type MockTx_SetDepositState_Call struct {
 // SetDepositState is a helper method to define mock.On call
 //   - ctx context.Context
 //   - transferID string
-//   - state deposit.State
+//   - state domain.State
 func (_e *MockTx_Expecter) SetDepositState(ctx any, transferID any, state any) *MockTx_SetDepositState_Call {
 	return &MockTx_SetDepositState_Call{Call: _e.mock.On("SetDepositState", ctx, transferID, state)}
 }
 
-func (_c *MockTx_SetDepositState_Call) Run(run func(ctx context.Context, transferID string, state deposit.State)) *MockTx_SetDepositState_Call {
+func (_c *MockTx_SetDepositState_Call) Run(run func(ctx context.Context, transferID string, state domain.State)) *MockTx_SetDepositState_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -644,9 +643,9 @@ func (_c *MockTx_SetDepositState_Call) Run(run func(ctx context.Context, transfe
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 deposit.State
+		var arg2 domain.State
 		if args[2] != nil {
-			arg2 = args[2].(deposit.State)
+			arg2 = args[2].(domain.State)
 		}
 		run(
 			arg0,
@@ -662,7 +661,7 @@ func (_c *MockTx_SetDepositState_Call) Return(err error) *MockTx_SetDepositState
 	return _c
 }
 
-func (_c *MockTx_SetDepositState_Call) RunAndReturn(run func(ctx context.Context, transferID string, state deposit.State) error) *MockTx_SetDepositState_Call {
+func (_c *MockTx_SetDepositState_Call) RunAndReturn(run func(ctx context.Context, transferID string, state domain.State) error) *MockTx_SetDepositState_Call {
 	_c.Call.Return(run)
 	return _c
 }

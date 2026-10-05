@@ -1,16 +1,14 @@
-// Package store implements credit.Store and credit.Tx over the ent client:
-// no business rules, only translation between domain values and rows, and
-// serialization at the database boundary (ADR 0003).
+// Package store adapts the credit interfaces to ent persistence.
 package store
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/big"
 
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/domain/ledger"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/store/ent"
 	"deposit-crediting/internal/store/ent/accountbalance"
@@ -28,7 +26,7 @@ func New(client *ent.Client) *Store {
 	return &Store{client: client}
 }
 
-// InTx commits on success and rolls back on any error.
+// InTx commits on success and rolls back on error.
 func (s *Store) InTx(ctx context.Context, fn func(context.Context, credit.Tx) error) (err error) {
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
@@ -36,7 +34,9 @@ func (s *Store) InTx(ctx context.Context, fn func(context.Context, credit.Tx) er
 	}
 	defer func() {
 		if err != nil {
-			_ = tx.Rollback() // secondary to the original failure
+			if rbErr := tx.Rollback(); rbErr != nil {
+				slog.Error("store: rollback failed", "original_err", err, "rollback_err", rbErr)
+			}
 			return
 		}
 		if commitErr := tx.Commit(); commitErr != nil {
@@ -66,7 +66,7 @@ func (t *Tx) DepositForUpdate(ctx context.Context, transferID string) (credit.Vi
 		return credit.View{}, fmt.Errorf("store: corrupt amount %q for %s", row.Amount, transferID)
 	}
 	return credit.View{
-		State:       deposit.State(row.State),
+		State:       domain.State(row.State),
 		Chain:       row.Chain,
 		Account:     row.Account,
 		Asset:       row.Asset,
@@ -96,7 +96,7 @@ func (t *Tx) SetCreditCycle(ctx context.Context, transferID string, cycle int) e
 	return nil
 }
 
-func (t *Tx) SetDepositState(ctx context.Context, transferID string, state deposit.State) error {
+func (t *Tx) SetDepositState(ctx context.Context, transferID string, state domain.State) error {
 	n, err := t.tx.Deposit.Update().
 		Where(entdeposit.TransferID(transferID)).
 		SetState(entdeposit.State(state)).
@@ -110,7 +110,7 @@ func (t *Tx) SetDepositState(ctx context.Context, transferID string, state depos
 	return nil
 }
 
-func (t *Tx) InsertEntry(ctx context.Context, e ledger.Entry) error {
+func (t *Tx) InsertEntry(ctx context.Context, e domain.Entry) error {
 	_, err := t.tx.LedgerEntry.Create().
 		SetAccount(e.Account).
 		SetAsset(e.Asset).
@@ -138,8 +138,7 @@ func (t *Tx) HasEntry(ctx context.Context, ref string) (bool, error) {
 	return n > 0, nil
 }
 
-// BalanceForUpdate creates a missing row first, so the lock has a row to
-// hold and first-touch is serialized like every later update.
+// BalanceForUpdate locks an existing balance or creates the first-touch row.
 func (t *Tx) BalanceForUpdate(ctx context.Context, account, asset string) (credit.Balance, error) {
 	row, err := t.lockBalance(ctx, account, asset)
 	if ent.IsNotFound(err) {

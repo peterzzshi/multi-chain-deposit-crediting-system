@@ -15,5 +15,109 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      args:
+        SERVICE: migrate
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  chainstub:
+    build:
+      context: .
+      args:
+        SERVICE: chain-node
+    environment:
+      LISTEN_ADDR: :9100
+    ports:
+      - "9100:9100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/v1/head"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  custodianstub:
+    build:
+      context: .
+      args:
+        SERVICE: custodian-api
+    environment:
+      LISTEN_ADDR: :9300
+    ports:
+      - "9300:9300"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9300/v1/deposits"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      args:
+        SERVICE: server
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
+      CHAIN_API_URL: http://chainstub:9100
+      CHAIN_ID: stubchain
+      ASSETS_CONFIG: /configs/assets.json
+      LISTEN_ADDR: :9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      chainstub:
+        condition: service_healthy
+    ports:
+      - "9200:9200"
+
+  scanner:
+    build:
+      context: .
+      args:
+        SERVICE: scanner
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
+      CHAIN_API_URL: http://chainstub:9100
+      CHAIN_ID: stubchain
+      ASSETS_CONFIG: /configs/assets.json
+      POLL_INTERVAL: 500ms
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      chainstub:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      args:
+        SERVICE: worker
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
+      CHAIN_API_URL: http://chainstub:9100
+      CUSTODIAN_API_URL: http://custodianstub:9300
+      CHAIN_ID: stubchain
+      PROVIDER: custodianA
+      ASSETS_CONFIG: /configs/assets.json
+      POLL_INTERVAL: 2s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      chainstub:
+        condition: service_healthy
+      custodianstub:
+        condition: service_healthy
+
 volumes:
   pgdata:

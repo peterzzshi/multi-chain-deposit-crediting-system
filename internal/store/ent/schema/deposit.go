@@ -54,5 +54,8 @@ func (Deposit) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("account", "asset"),
 		index.Fields("state"),
+		index.Fields("chain", "state", "block_height"), // finalization queries
+		index.Fields("tx_hash"),                        // custodian re-checker lookup
+		index.Fields("state", "reorged_height"),        // reorg window expiry
 	}
 }

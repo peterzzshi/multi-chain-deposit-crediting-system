@@ -1,10 +1,9 @@
-// worker runs the background loops: the custodian re-checker, the
-// reconciliation poller + solvency check (when CUSTODIAN_API_URL is set),
-// the exposure monitor, and the runtime invariant checker.
+// worker runs rechecking, reconciliation, risk, and invariant loops.
 package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -12,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"deposit-crediting/internal/adapters/chain/httpclient"
+	"deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/custodian"
-	"deposit-crediting/internal/custodian/httpprovider"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/risk"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
@@ -26,18 +25,18 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
-	chainID := env("CHAIN_ID", "stubchain")
-	poll := envDuration("POLL_INTERVAL", 2*time.Second)
+	chainID := config.RequireEnv("CHAIN_ID")
+	poll := config.RequireDuration("POLL_INTERVAL")
+	if poll <= 0 {
+		fatal("invalid POLL_INTERVAL", fmt.Errorf("must be positive"))
+	}
 
-	db, err := ent.Open("postgres", env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable"))
+	db, err := ent.Open("postgres", config.RequireEnv("DATABASE_URL"))
 	if err != nil {
 		fatal("open database", err)
 	}
 	defer db.Close()
-	if err := db.Schema.Create(context.Background()); err != nil {
-		fatal("migrate schema", err)
-	}
-	assets, err := config.LoadAssets(env("ASSETS_CONFIG", "configs/assets.json"))
+	assets, err := config.LoadAssets(config.RequireEnv("ASSETS_CONFIG"))
 	if err != nil {
 		fatal("load assets config", err)
 	}
@@ -45,11 +44,11 @@ func main() {
 		fatal("apply assets config", err)
 	}
 
-	chainClient := httpclient.New(env("CHAIN_API_URL", "http://localhost:9100"))
+	chainClient := adapters.New(config.RequireEnv("CHAIN_API_URL"))
 	engine := credit.NewEngine(store.New(db))
 	custodianStore := store.NewCustodianStore(db)
 	riskStore := store.NewRiskStore(db)
-	custodianCfg := custodian.Config{ChainID: chainID, Provider: env("PROVIDER", "custodianA"), PollInterval: poll}
+	custodianCfg := custodian.Config{ChainID: domain.NetworkID(chainID), Provider: config.RequireEnv("PROVIDER"), PollInterval: poll}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -58,21 +57,21 @@ func main() {
 
 	var wg sync.WaitGroup
 	run := func(name string, fn func(context.Context) error) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := fn(ctx); err != nil && ctx.Err() == nil {
 				slog.Error("worker component stopped", "component", name, "err", err)
 				cancel()
 			}
-		}()
+		})
 	}
 
 	run("rechecker", custodian.NewRechecker(custodianCfg, chainClient, custodianStore, engine).Run)
-	run("exposure-monitor", risk.NewMonitor(risk.Config{ChainID: chainID, PollInterval: poll}, riskStore).Run)
+	run("exposure-monitor", risk.NewMonitor(risk.Config{NetworkID: domain.NetworkID(chainID), PollInterval: poll}, riskStore).Run)
 
-	invariants := risk.NewInvariantChecker(chainID, chainClient, riskStore)
+	invariants := risk.NewInvariantChecker(domain.NetworkID(chainID), chainClient, riskStore)
 	run("invariant-checker", func(ctx context.Context) error {
+		ticker := time.NewTicker(poll)
+		defer ticker.Stop()
 		for {
 			violations, err := invariants.Check(ctx)
 			if err != nil && ctx.Err() == nil {
@@ -84,18 +83,18 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(poll):
+			case <-ticker.C:
 			}
 		}
 	})
 
 	if providerURL := os.Getenv("CUSTODIAN_API_URL"); providerURL != "" {
-		provider := httpprovider.New(providerURL)
+		provider := custodian.NewHTTPProvider(providerURL)
 		ingestor := custodian.NewIngestor(custodianCfg, chainClient, custodianStore)
 		solvency := custodian.NewSolvencyChecker(custodianCfg, provider, custodianStore, poll)
 		reconciler := custodian.NewReconciler(provider, ingestor,
-			envDuration("RECONCILE_INTERVAL", 10*time.Second),
-			envDuration("RECONCILE_OVERLAP", 2*time.Minute)).WithSolvency(solvency)
+			config.RequireDuration("RECONCILE_INTERVAL"),
+			config.RequireDuration("RECONCILE_OVERLAP")).WithSolvency(solvency)
 		run("reconciler", reconciler.Run)
 		slog.Info("reconciliation enabled", "provider", providerURL)
 	} else {
@@ -104,22 +103,6 @@ func main() {
 
 	slog.Info("worker starting", "chain", chainID)
 	wg.Wait()
-}
-
-func env(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func envDuration(key string, fallback time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
-		}
-	}
-	return fallback
 }
 
 func fatal(what string, err error) {

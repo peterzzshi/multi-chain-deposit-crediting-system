@@ -12,18 +12,18 @@ import (
 	"testing"
 
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-	"deposit-crediting/internal/store/storetest"
+	storetest "deposit-crediting/internal/store/store_test"
 )
 
 func BenchmarkEngineCredit(b *testing.B) {
-	client := storetest.OpenDB(b)
+	client := store.OpenDB(b)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 
-	state, _, err := deposit.Transition(deposit.StateNone, deposit.EventObserved)
+	state, _, err := domain.Transition(domain.StateNone, domain.EventObserved)
 	if err != nil {
 		b.Fatalf("Transition(OBSERVED): %v", err)
 	}
@@ -31,7 +31,7 @@ func BenchmarkEngineCredit(b *testing.B) {
 		if _, err := client.Deposit.Create().
 			SetTransferID(fmt.Sprintf("evm:0xc%08x:native", i)).
 			SetChain("evm").SetAsset("ETH").SetAccount("alice").SetAddress("0xdeposit").
-			SetAmount("100").SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.State(state)).
+			SetAmount("100").SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.State(state)).
 			SetBlockHeight(1).SetBlockHash("0xb1").
 			Save(ctx); err != nil {
 			b.Fatalf("open deposit %d: %v", i, err)
@@ -40,7 +40,7 @@ func BenchmarkEngineCredit(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := engine.Apply(ctx, fmt.Sprintf("evm:0xc%08x:native", i), deposit.EventDepthReached); err != nil {
+		if err := engine.Apply(ctx, fmt.Sprintf("evm:0xc%08x:native", i), domain.EventDepthReached); err != nil {
 			b.Fatalf("credit %d: %v", i, err)
 		}
 	}
@@ -51,11 +51,11 @@ func BenchmarkEngineCredit(b *testing.B) {
 // Credits parallelize across accounts: per-(account, asset) serialization
 // (ADR 0003) bounds one account, not the system.
 func BenchmarkEngineCreditParallel(b *testing.B) {
-	client := storetest.OpenDB(b)
+	client := store.OpenDB(b)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 
-	state, _, err := deposit.Transition(deposit.StateNone, deposit.EventObserved)
+	state, _, err := domain.Transition(domain.StateNone, domain.EventObserved)
 	if err != nil {
 		b.Fatalf("Transition(OBSERVED): %v", err)
 	}
@@ -63,7 +63,7 @@ func BenchmarkEngineCreditParallel(b *testing.B) {
 		if _, err := client.Deposit.Create().
 			SetTransferID(fmt.Sprintf("evm:0xp%08x:native", i)).
 			SetChain("evm").SetAsset("ETH").SetAccount(fmt.Sprintf("acct-%d", i%16)).SetAddress("0xdeposit").
-			SetAmount("100").SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.State(state)).
+			SetAmount("100").SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.State(state)).
 			SetBlockHeight(1).SetBlockHash("0xb1").
 			Save(ctx); err != nil {
 			b.Fatalf("open deposit %d: %v", i, err)
@@ -75,7 +75,7 @@ func BenchmarkEngineCreditParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			i := next.Add(1) - 1
-			if err := engine.Apply(ctx, fmt.Sprintf("evm:0xp%08x:native", i), deposit.EventDepthReached); err != nil {
+			if err := engine.Apply(ctx, fmt.Sprintf("evm:0xp%08x:native", i), domain.EventDepthReached); err != nil {
 				b.Errorf("credit %d: %v", i, err)
 			}
 		}
@@ -85,23 +85,23 @@ func BenchmarkEngineCreditParallel(b *testing.B) {
 }
 
 func BenchmarkEngineDebit(b *testing.B) {
-	client := storetest.OpenDB(b)
+	client := store.OpenDB(b)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 
-	state, _, err := deposit.Transition(deposit.StateNone, deposit.EventObserved)
+	state, _, err := domain.Transition(domain.StateNone, domain.EventObserved)
 	if err != nil {
 		b.Fatalf("Transition(OBSERVED): %v", err)
 	}
 	if _, err := client.Deposit.Create().
 		SetTransferID("evm:0xstake:native").
 		SetChain("evm").SetAsset("ETH").SetAccount("alice").SetAddress("0xdeposit").
-		SetAmount("1000000000000").SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.State(state)).
+		SetAmount("1000000000000").SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.State(state)).
 		SetBlockHeight(1).SetBlockHash("0xb1").
 		Save(ctx); err != nil {
 		b.Fatalf("open stake deposit: %v", err)
 	}
-	if err := engine.Apply(ctx, "evm:0xstake:native", deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, "evm:0xstake:native", domain.EventDepthReached); err != nil {
 		b.Fatalf("stake credit: %v", err)
 	}
 

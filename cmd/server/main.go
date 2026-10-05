@@ -1,6 +1,3 @@
-// server exposes the custodian webhook endpoint, an external-debit
-// endpoint (simulating the platform's other flows), and read endpoints
-// for inspecting deposits and balances. See docs/manual-verification.md.
 package main
 
 import (
@@ -11,13 +8,12 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"time"
 
-	"deposit-crediting/internal/adapters/chain"
-	"deposit-crediting/internal/adapters/chain/httpclient"
+	"deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/custodian"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
@@ -30,15 +26,12 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 
-	db, err := ent.Open("postgres", env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable"))
+	db, err := ent.Open("postgres", config.RequireEnv("DATABASE_URL"))
 	if err != nil {
 		fatal("open database", err)
 	}
 	defer db.Close()
-	if err := db.Schema.Create(context.Background()); err != nil {
-		fatal("migrate schema", err)
-	}
-	assets, err := config.LoadAssets(env("ASSETS_CONFIG", "configs/assets.json"))
+	assets, err := config.LoadAssets(config.RequireEnv("ASSETS_CONFIG"))
 	if err != nil {
 		fatal("load assets config", err)
 	}
@@ -48,9 +41,9 @@ func main() {
 
 	engine := credit.NewEngine(store.New(db))
 	ingestor := custodian.NewIngestor(custodian.Config{
-		ChainID:  env("CHAIN_ID", "stubchain"),
-		Provider: env("PROVIDER", "custodianA"),
-	}, httpclient.New(env("CHAIN_API_URL", "http://localhost:9100")), store.NewCustodianStore(db))
+		ChainID:  domain.NetworkID(config.RequireEnv("CHAIN_ID")),
+		Provider: config.RequireEnv("PROVIDER"),
+	}, adapters.New(config.RequireEnv("CHAIN_API_URL")), store.NewCustodianStore(db))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -62,52 +55,26 @@ func main() {
 	mux.HandleFunc("GET /v1/deposits", depositsHandler(db))
 	mux.HandleFunc("GET /v1/balances/{account}", balancesHandler(db))
 
-	addr := env("LISTEN_ADDR", ":9200")
+	addr := config.RequireEnv("LISTEN_ADDR")
 	slog.Info("server listening", "addr", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		fatal("server exited", err)
 	}
 }
 
-type claimJSON struct {
-	ProviderEventID string `json:"providerEventId"`
-	Chain           string `json:"chain"`
-	TxHash          string `json:"txHash"`
-	To              string `json:"to"`
-	Asset           string `json:"asset"`
-	Amount          string `json:"amount"`
-	Kind            string `json:"kind,omitempty"`
-	LogIndex        *int   `json:"logIndex,omitempty"`
-	TraceIndex      *int   `json:"traceIndex,omitempty"`
-	ObservedAt      string `json:"observedAt"`
-}
-
 func webhookHandler(ing *custodian.Ingestor) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var cj claimJSON
+		var cj custodian.ClaimJSON
 		if err := json.NewDecoder(r.Body).Decode(&cj); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		amount, ok := new(big.Int).SetString(cj.Amount, 10)
-		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "amount must be a base-10 integer string"})
+		cl, err := cj.ToClaim()
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		observedAt := time.Now()
-		if cj.ObservedAt != "" {
-			parsed, err := time.Parse(time.RFC3339, cj.ObservedAt)
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "observedAt must be RFC3339"})
-				return
-			}
-			observedAt = parsed
-		}
-		err := ing.Handle(r.Context(), custodian.Claim{
-			ProviderEventID: cj.ProviderEventID, Chain: cj.Chain, TxHash: cj.TxHash,
-			To: cj.To, Asset: cj.Asset, Amount: amount, Kind: chain.TransferKind(cj.Kind),
-			LogIndex: cj.LogIndex, TraceIndex: cj.TraceIndex, ObservedAt: observedAt,
-		})
+		err = ing.Handle(r.Context(), cl)
 		switch {
 		case err == nil:
 			writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
@@ -241,13 +208,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func env(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 func fatal(what string, err error) {

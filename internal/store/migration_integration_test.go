@@ -16,33 +16,33 @@ import (
 	"time"
 
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/store"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-	"deposit-crediting/internal/store/storetest"
+	storetest "deposit-crediting/internal/store/store_test"
 )
 
 const rehearsalDSN = "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable&connect_timeout=2"
 
 func TestExpandContractMigrationUnderTraffic(t *testing.T) {
-	client := storetest.OpenDB(t)
+	client := store.OpenDB(t)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
 
-	state, _, err := deposit.Transition(deposit.StateNone, deposit.EventObserved)
+	state, _, err := domain.Transition(domain.StateNone, domain.EventObserved)
 	if err != nil {
 		t.Fatalf("Transition(OBSERVED): %v", err)
 	}
 	if _, err := client.Deposit.Create().
 		SetTransferID("evm:0xmig:native").
 		SetChain("evm").SetAsset("ETH").SetAccount("alice").SetAddress("0xdeposit").
-		SetAmount("1000000").SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.State(state)).
+		SetAmount("1000000").SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.State(state)).
 		SetBlockHeight(1).SetBlockHash("0xb1").
 		Save(ctx); err != nil {
 		t.Fatalf("open deposit: %v", err)
 	}
-	if err := engine.Apply(ctx, "evm:0xmig:native", deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, "evm:0xmig:native", domain.EventDepthReached); err != nil {
 		t.Fatalf("credit: %v", err)
 	}
 

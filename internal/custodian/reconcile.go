@@ -10,11 +10,7 @@ import (
 	"deposit-crediting/internal/errs"
 )
 
-// Reconciler polls the custodian query API with overlapping windows and
-// feeds every claim through the Ingestor, recovering whatever the webhook
-// channel duplicated, delayed, or dropped (ADR 0004). When a
-// SolvencyChecker is attached, each tick also compares vault vs ledger
-// totals — vault balance-change data flows through reconciliation only.
+// Reconciler polls the custodian API and feeds claims through the ingestor.
 type Reconciler struct {
 	provider Provider
 	ing      *Ingestor
@@ -35,6 +31,14 @@ func (r *Reconciler) WithSolvency(s *SolvencyChecker) *Reconciler {
 
 // Run polls until ctx is done; tick errors are logged and retried.
 func (r *Reconciler) Run(ctx context.Context) error {
+	if r.interval <= 0 {
+		return fmt.Errorf("reconcile: interval must be positive")
+	}
+	if r.overlap < 0 {
+		return fmt.Errorf("reconcile: overlap must not be negative")
+	}
+	ticker := time.NewTicker(r.interval)
+	defer ticker.Stop()
 	for {
 		if err := r.Tick(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("reconciler tick failed", "err", err)
@@ -42,7 +46,7 @@ func (r *Reconciler) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(r.interval):
+		case <-ticker.C:
 		}
 	}
 }

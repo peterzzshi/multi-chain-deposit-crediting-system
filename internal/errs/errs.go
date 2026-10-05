@@ -1,5 +1,3 @@
-// Package errs holds the sentinel errors matched with errors.Is across the
-// codebase. Each is wrapped with %w at the failure site.
 package errs
 
 import "errors"
@@ -8,18 +6,10 @@ var (
 	ErrInvalidPart       = errors.New("invalid ID part")
 	ErrIllegalTransition = errors.New("illegal deposit transition")
 	ErrInvalidEntry      = errors.New("invalid ledger entry")
-	ErrInsufficientFunds = errors.New("insufficient funds") // retryable after top-up (ADR 0003)
+	ErrInsufficientFunds = errors.New("insufficient funds")
 	ErrDepositNotFound   = errors.New("deposit not found")
-	ErrAccountFlagged    = errors.New("account flagged")      // debits blocked until the reversal shortfall is resolved (ADR 0002)
-	ErrDuplicateRef      = errors.New("duplicate ledger ref") // idempotency boundary; usually treat as success (ADR 0001)
-
-	// ErrChainInconsistent means chain data contradicts the recorded cursor
-	// beyond what reorg rewind handles (e.g. a reorg landed mid-tick).
-	// Retry cannot fix it — the operator must repair the cursor.
+	ErrAccountFlagged    = errors.New("account flagged")
+	ErrDuplicateRef      = errors.New("duplicate ledger ref")
 	ErrChainInconsistent = errors.New("chain inconsistent with cursor")
-
-	// ErrClaimNotOnChain means a custodian claim cannot be verified yet
-	// (node lag or phantom). Transient: the next reconciliation poll or
-	// provider redelivery retries it (ADR 0004).
-	ErrClaimNotOnChain = errors.New("claim not on chain")
+	ErrClaimNotOnChain   = errors.New("claim not on chain")
 )

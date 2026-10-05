@@ -1,19 +1,17 @@
-// scanner runs the self-built ingest path against a chain node API
-// (chainstub locally) and PostgreSQL. See docs/manual-verification.md.
+// scanner runs the self-built ingest path against a chain node and PostgreSQL.
 package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"deposit-crediting/internal/adapters/chain/httpclient"
+	"deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/credit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/scanner"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
@@ -24,15 +22,12 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 
-	db, err := ent.Open("postgres", env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable"))
+	db, err := ent.Open("postgres", config.RequireEnv("DATABASE_URL"))
 	if err != nil {
 		fatal("open database", err)
 	}
 	defer db.Close()
-	if err := db.Schema.Create(context.Background()); err != nil {
-		fatal("migrate schema", err)
-	}
-	assets, err := config.LoadAssets(env("ASSETS_CONFIG", "configs/assets.json"))
+	assets, err := config.LoadAssets(config.RequireEnv("ASSETS_CONFIG"))
 	if err != nil {
 		fatal("load assets config", err)
 	}
@@ -40,46 +35,21 @@ func main() {
 		fatal("apply assets config", err)
 	}
 
+	chainID := config.RequireEnv("CHAIN_ID")
 	engine := credit.NewEngine(store.New(db))
 	sc := scanner.New(scanner.Config{
-		ChainID:      env("CHAIN_ID", "stubchain"),
-		StartHeight:  envUint64("START_HEIGHT", 1),
-		MaxBatch:     envUint64("MAX_BATCH", 100),
-		PollInterval: envDuration("POLL_INTERVAL", 500*time.Millisecond),
-	}, httpclient.New(env("CHAIN_API_URL", "http://localhost:9100")), store.NewScannerStore(db), engine)
+		ChainID:      domain.NetworkID(chainID),
+		StartHeight:  config.RequireUint64("START_HEIGHT"),
+		MaxBatch:     config.RequireUint64("MAX_BATCH"),
+		PollInterval: config.RequireDuration("POLL_INTERVAL"),
+	}, adapters.New(config.RequireEnv("CHAIN_API_URL")), store.NewScannerStore(db), engine)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	slog.Info("scanner starting", "chain", env("CHAIN_ID", "stubchain"))
+	slog.Info("scanner starting", "chain", chainID)
 	if err := sc.Run(ctx); err != nil && ctx.Err() == nil {
 		fatal("scanner stopped", err)
 	}
-}
-
-func env(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func envUint64(key string, fallback uint64) uint64 {
-	if v := os.Getenv(key); v != "" {
-		var n uint64
-		if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
-			return n
-		}
-	}
-	return fallback
-}
-
-func envDuration(key string, fallback time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
-		}
-	}
-	return fallback
 }
 
 func fatal(what string, err error) {

@@ -4,9 +4,13 @@
 -- Asset configs come from configs/assets.json (applied by the binaries at
 -- startup); this file only seeds deposit addresses. Idempotent.
 
-INSERT INTO deposit_addresses (account, chain, address, mode, active)
+INSERT INTO deposit_addresses (account, chain, address, active)
 VALUES
-  ('alice', 'stubchain', '0xaaa', 'self_built', true),
-  ('carol', 'stubchain', '0xccc', 'self_built', true),
-  ('bob',   'stubchain', '0xbbb', 'custodian',  true)
+  -- stubchain addresses (scenarios 1-20, 25-29)
+  ('alice', 'stubchain', '0xaaa', true),
+  ('carol', 'stubchain', '0xccc', true),
+  ('bob',   'stubchain', '0xbbb', true),
+  ('dave',  'stubchain', '0xddd', true),
+  -- fastchain addresses (scenario 21)
+  ('eve',   'fastchain', '0xeee', true)
 ON CONFLICT (chain, address) DO NOTHING;

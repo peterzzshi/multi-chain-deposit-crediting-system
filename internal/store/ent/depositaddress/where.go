@@ -268,26 +268,6 @@ func AddressContainsFold(v string) predicate.DepositAddress {
 	return predicate.DepositAddress(sql.FieldContainsFold(FieldAddress, v))
 }
 
-// ModeEQ applies the EQ predicate on the "mode" field.
-func ModeEQ(v Mode) predicate.DepositAddress {
-	return predicate.DepositAddress(sql.FieldEQ(FieldMode, v))
-}
-
-// ModeNEQ applies the NEQ predicate on the "mode" field.
-func ModeNEQ(v Mode) predicate.DepositAddress {
-	return predicate.DepositAddress(sql.FieldNEQ(FieldMode, v))
-}
-
-// ModeIn applies the In predicate on the "mode" field.
-func ModeIn(vs ...Mode) predicate.DepositAddress {
-	return predicate.DepositAddress(sql.FieldIn(FieldMode, vs...))
-}
-
-// ModeNotIn applies the NotIn predicate on the "mode" field.
-func ModeNotIn(vs ...Mode) predicate.DepositAddress {
-	return predicate.DepositAddress(sql.FieldNotIn(FieldMode, vs...))
-}
-
 // ActiveEQ applies the EQ predicate on the "active" field.
 func ActiveEQ(v bool) predicate.DepositAddress {
 	return predicate.DepositAddress(sql.FieldEQ(FieldActive, v))

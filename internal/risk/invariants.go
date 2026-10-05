@@ -4,39 +4,31 @@ import (
 	"context"
 	"fmt"
 
-	"deposit-crediting/internal/adapters/chain"
+	"deposit-crediting/internal/adapters"
+	"deposit-crediting/internal/domain"
 )
 
-// Violation is one broken runtime invariant (Q17): the checks mirror the
-// test invariants — the same assertions that guard the harness guard
-// production.
 type Violation struct {
 	Check  string
 	Detail string
 }
 
-// InvariantChecker verifies cross-table invariants the per-transaction
-// constraints cannot cover. It runs on the monitor cadence; violations
-// are alerts, never automatic actions.
 type InvariantChecker struct {
-	chainID string
-	chain   chain.Client
-	store   Store
+	networkID domain.NetworkID
+	chain     adapters.Client
+	store     Store
 }
 
-// A reorged deposit left unresolved beyond twice its reorg window means
-// the scanner/re-checker is stuck (reversal or drop lag).
 const reorgLagFactor = 2
 
-func NewInvariantChecker(chainID string, c chain.Client, st Store) *InvariantChecker {
-	return &InvariantChecker{chainID: chainID, chain: c, store: st}
+func NewInvariantChecker(networkID domain.NetworkID, c adapters.Client, st Store) *InvariantChecker {
+	return &InvariantChecker{networkID: networkID, chain: c, store: st}
 }
 
-// Check runs all invariant checks and returns every violation found.
 func (c *InvariantChecker) Check(ctx context.Context) ([]Violation, error) {
 	var out []Violation
 
-	missing, err := c.store.CreditsMissingEntry(ctx, c.chainID)
+	missing, err := c.store.CreditsMissingEntry(ctx, string(c.networkID))
 	if err != nil {
 		return nil, fmt.Errorf("invariants: credits missing entry: %w", err)
 	}
@@ -58,11 +50,11 @@ func (c *InvariantChecker) Check(ctx context.Context) ([]Violation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invariants: head: %w", err)
 	}
-	windows, err := c.store.Windows(ctx, c.chainID)
+	windows, err := c.store.Windows(ctx, string(c.networkID))
 	if err != nil {
 		return nil, fmt.Errorf("invariants: reorg windows: %w", err)
 	}
-	reorged, err := c.store.ReorgedDeposits(ctx, c.chainID)
+	reorged, err := c.store.ReorgedDeposits(ctx, string(c.networkID))
 	if err != nil {
 		return nil, fmt.Errorf("invariants: reorged deposits: %w", err)
 	}

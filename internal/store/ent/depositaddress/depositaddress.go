@@ -3,8 +3,6 @@
 package depositaddress
 
 import (
-	"fmt"
-
 	"entgo.io/ent/dialect/sql"
 )
 
@@ -19,8 +17,6 @@ const (
 	FieldChain = "chain"
 	// FieldAddress holds the string denoting the address field in the database.
 	FieldAddress = "address"
-	// FieldMode holds the string denoting the mode field in the database.
-	FieldMode = "mode"
 	// FieldActive holds the string denoting the active field in the database.
 	FieldActive = "active"
 	// Table holds the table name of the depositaddress in the database.
@@ -33,7 +29,6 @@ var Columns = []string{
 	FieldAccount,
 	FieldChain,
 	FieldAddress,
-	FieldMode,
 	FieldActive,
 }
 
@@ -58,29 +53,6 @@ var (
 	DefaultActive bool
 )
 
-// Mode defines the type for the "mode" enum field.
-type Mode string
-
-// Mode values.
-const (
-	ModeSelfBuilt Mode = "self_built"
-	ModeCustodian Mode = "custodian"
-)
-
-func (m Mode) String() string {
-	return string(m)
-}
-
-// ModeValidator is a validator for the "mode" field enum values. It is called by the builders before save.
-func ModeValidator(m Mode) error {
-	switch m {
-	case ModeSelfBuilt, ModeCustodian:
-		return nil
-	default:
-		return fmt.Errorf("depositaddress: invalid enum value for mode field: %q", m)
-	}
-}
-
 // OrderOption defines the ordering options for the DepositAddress queries.
 type OrderOption func(*sql.Selector)
 
@@ -102,11 +74,6 @@ func ByChain(opts ...sql.OrderTermOption) OrderOption {
 // ByAddress orders the results by the address field.
 func ByAddress(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAddress, opts...).ToFunc()
-}
-
-// ByMode orders the results by the mode field.
-func ByMode(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMode, opts...).ToFunc()
 }
 
 // ByActive orders the results by the active field.

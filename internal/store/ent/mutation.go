@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/accountbalance"
 	"deposit-crediting/internal/store/ent/assetconfig"
 	"deposit-crediting/internal/store/ent/canonicalblock"
@@ -2616,7 +2617,7 @@ type DepositMutation struct {
 	account           *string
 	address           *string
 	amount            *string
-	mode              *deposit.Mode
+	mode              *domain.Mode
 	state             *deposit.State
 	credit_cycle      *int
 	addcredit_cycle   *int
@@ -2951,12 +2952,12 @@ func (m *DepositMutation) ResetAmount() {
 }
 
 // SetMode sets the "mode" field.
-func (m *DepositMutation) SetMode(d deposit.Mode) {
+func (m *DepositMutation) SetMode(d domain.Mode) {
 	m.mode = &d
 }
 
 // Mode returns the value of the "mode" field in the mutation.
-func (m *DepositMutation) Mode() (r deposit.Mode, exists bool) {
+func (m *DepositMutation) Mode() (r domain.Mode, exists bool) {
 	v := m.mode
 	if v == nil {
 		return
@@ -2967,7 +2968,7 @@ func (m *DepositMutation) Mode() (r deposit.Mode, exists bool) {
 // OldMode returns the old "mode" field's value of the Deposit entity.
 // If the Deposit object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DepositMutation) OldMode(ctx context.Context) (v deposit.Mode, err error) {
+func (m *DepositMutation) OldMode(ctx context.Context) (v domain.Mode, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMode is only allowed on UpdateOne operations")
 	}
@@ -3696,7 +3697,7 @@ func (m *DepositMutation) SetField(name string, value ent.Value) error {
 		m.SetAmount(v)
 		return nil
 	case deposit.FieldMode:
-		v, ok := value.(deposit.Mode)
+		v, ok := value.(domain.Mode)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4005,7 +4006,6 @@ type DepositAddressMutation struct {
 	account       *string
 	chain         *string
 	address       *string
-	mode          *depositaddress.Mode
 	active        *bool
 	clearedFields map[string]struct{}
 	done          bool
@@ -4219,42 +4219,6 @@ func (m *DepositAddressMutation) ResetAddress() {
 	m.address = nil
 }
 
-// SetMode sets the "mode" field.
-func (m *DepositAddressMutation) SetMode(d depositaddress.Mode) {
-	m.mode = &d
-}
-
-// Mode returns the value of the "mode" field in the mutation.
-func (m *DepositAddressMutation) Mode() (r depositaddress.Mode, exists bool) {
-	v := m.mode
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMode returns the old "mode" field's value of the DepositAddress entity.
-// If the DepositAddress object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DepositAddressMutation) OldMode(ctx context.Context) (v depositaddress.Mode, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMode is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMode requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMode: %w", err)
-	}
-	return oldValue.Mode, nil
-}
-
-// ResetMode resets all changes to the "mode" field.
-func (m *DepositAddressMutation) ResetMode() {
-	m.mode = nil
-}
-
 // SetActive sets the "active" field.
 func (m *DepositAddressMutation) SetActive(b bool) {
 	m.active = &b
@@ -4325,7 +4289,7 @@ func (m *DepositAddressMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DepositAddressMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 4)
 	if m.account != nil {
 		fields = append(fields, depositaddress.FieldAccount)
 	}
@@ -4334,9 +4298,6 @@ func (m *DepositAddressMutation) Fields() []string {
 	}
 	if m.address != nil {
 		fields = append(fields, depositaddress.FieldAddress)
-	}
-	if m.mode != nil {
-		fields = append(fields, depositaddress.FieldMode)
 	}
 	if m.active != nil {
 		fields = append(fields, depositaddress.FieldActive)
@@ -4355,8 +4316,6 @@ func (m *DepositAddressMutation) Field(name string) (ent.Value, bool) {
 		return m.Chain()
 	case depositaddress.FieldAddress:
 		return m.Address()
-	case depositaddress.FieldMode:
-		return m.Mode()
 	case depositaddress.FieldActive:
 		return m.Active()
 	}
@@ -4374,8 +4333,6 @@ func (m *DepositAddressMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldChain(ctx)
 	case depositaddress.FieldAddress:
 		return m.OldAddress(ctx)
-	case depositaddress.FieldMode:
-		return m.OldMode(ctx)
 	case depositaddress.FieldActive:
 		return m.OldActive(ctx)
 	}
@@ -4407,13 +4364,6 @@ func (m *DepositAddressMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAddress(v)
-		return nil
-	case depositaddress.FieldMode:
-		v, ok := value.(depositaddress.Mode)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMode(v)
 		return nil
 	case depositaddress.FieldActive:
 		v, ok := value.(bool)
@@ -4479,9 +4429,6 @@ func (m *DepositAddressMutation) ResetField(name string) error {
 		return nil
 	case depositaddress.FieldAddress:
 		m.ResetAddress()
-		return nil
-	case depositaddress.FieldMode:
-		m.ResetMode()
 		return nil
 	case depositaddress.FieldActive:
 		m.ResetActive()

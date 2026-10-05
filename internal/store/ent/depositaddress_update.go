@@ -69,20 +69,6 @@ func (_u *DepositAddressUpdate) SetNillableAddress(v *string) *DepositAddressUpd
 	return _u
 }
 
-// SetMode sets the "mode" field.
-func (_u *DepositAddressUpdate) SetMode(v depositaddress.Mode) *DepositAddressUpdate {
-	_u.mutation.SetMode(v)
-	return _u
-}
-
-// SetNillableMode sets the "mode" field if the given value is not nil.
-func (_u *DepositAddressUpdate) SetNillableMode(v *depositaddress.Mode) *DepositAddressUpdate {
-	if v != nil {
-		_u.SetMode(*v)
-	}
-	return _u
-}
-
 // SetActive sets the "active" field.
 func (_u *DepositAddressUpdate) SetActive(v bool) *DepositAddressUpdate {
 	_u.mutation.SetActive(v)
@@ -146,11 +132,6 @@ func (_u *DepositAddressUpdate) check() error {
 			return &ValidationError{Name: "address", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.address": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Mode(); ok {
-		if err := depositaddress.ModeValidator(v); err != nil {
-			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.mode": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -174,9 +155,6 @@ func (_u *DepositAddressUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.Address(); ok {
 		_spec.SetField(depositaddress.FieldAddress, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Mode(); ok {
-		_spec.SetField(depositaddress.FieldMode, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(depositaddress.FieldActive, field.TypeBool, value)
@@ -239,20 +217,6 @@ func (_u *DepositAddressUpdateOne) SetAddress(v string) *DepositAddressUpdateOne
 func (_u *DepositAddressUpdateOne) SetNillableAddress(v *string) *DepositAddressUpdateOne {
 	if v != nil {
 		_u.SetAddress(*v)
-	}
-	return _u
-}
-
-// SetMode sets the "mode" field.
-func (_u *DepositAddressUpdateOne) SetMode(v depositaddress.Mode) *DepositAddressUpdateOne {
-	_u.mutation.SetMode(v)
-	return _u
-}
-
-// SetNillableMode sets the "mode" field if the given value is not nil.
-func (_u *DepositAddressUpdateOne) SetNillableMode(v *depositaddress.Mode) *DepositAddressUpdateOne {
-	if v != nil {
-		_u.SetMode(*v)
 	}
 	return _u
 }
@@ -333,11 +297,6 @@ func (_u *DepositAddressUpdateOne) check() error {
 			return &ValidationError{Name: "address", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.address": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Mode(); ok {
-		if err := depositaddress.ModeValidator(v); err != nil {
-			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.mode": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -378,9 +337,6 @@ func (_u *DepositAddressUpdateOne) sqlSave(ctx context.Context) (_node *DepositA
 	}
 	if value, ok := _u.mutation.Address(); ok {
 		_spec.SetField(depositaddress.FieldAddress, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Mode(); ok {
-		_spec.SetField(depositaddress.FieldMode, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(depositaddress.FieldActive, field.TypeBool, value)

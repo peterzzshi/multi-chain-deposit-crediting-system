@@ -6,9 +6,7 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// DepositAddress maps a deposit address to its owner. An address belongs
-// to exactly one (account, chain, mode); a user may hold one self-built
-// and one custodian address per chain (docs/assumptions-and-scope.md).
+// DepositAddress maps the single deposit address for an account and chain.
 type DepositAddress struct {
 	ent.Schema
 }
@@ -19,7 +17,6 @@ func (DepositAddress) Fields() []ent.Field {
 		field.String("account").NotEmpty(),
 		field.String("chain").NotEmpty(),
 		field.String("address").NotEmpty(),
-		field.Enum("mode").Values("self_built", "custodian"),
 		field.Bool("active").Default(true),
 	}
 }
@@ -27,6 +24,8 @@ func (DepositAddress) Fields() []ent.Field {
 // Indexes of the DepositAddress.
 func (DepositAddress) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("chain", "address").Unique(),
+		index.Fields("account", "chain").Unique(),
+		index.Fields("address").Unique(), // scanner lookups
+		index.Fields("chain", "address"), // other queries
 	}
 }

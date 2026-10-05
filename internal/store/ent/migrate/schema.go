@@ -76,6 +76,11 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CanonicalBlocksColumns[1], CanonicalBlocksColumns[2]},
 			},
+			{
+				Name:    "canonicalblock_chain",
+				Unique:  false,
+				Columns: []*schema.Column{CanonicalBlocksColumns[1]},
+			},
 		},
 	}
 	// ChainCursorsColumns holds the columns for the "chain_cursors" table.
@@ -128,6 +133,21 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{DepositsColumns[8]},
 			},
+			{
+				Name:    "deposit_chain_state_block_height",
+				Unique:  false,
+				Columns: []*schema.Column{DepositsColumns[2], DepositsColumns[8], DepositsColumns[10]},
+			},
+			{
+				Name:    "deposit_tx_hash",
+				Unique:  false,
+				Columns: []*schema.Column{DepositsColumns[13]},
+			},
+			{
+				Name:    "deposit_state_reorged_height",
+				Unique:  false,
+				Columns: []*schema.Column{DepositsColumns[8], DepositsColumns[12]},
+			},
 		},
 	}
 	// DepositAddressesColumns holds the columns for the "deposit_addresses" table.
@@ -136,7 +156,6 @@ var (
 		{Name: "account", Type: field.TypeString},
 		{Name: "chain", Type: field.TypeString},
 		{Name: "address", Type: field.TypeString},
-		{Name: "mode", Type: field.TypeEnum, Enums: []string{"self_built", "custodian"}},
 		{Name: "active", Type: field.TypeBool, Default: true},
 	}
 	// DepositAddressesTable holds the schema information for the "deposit_addresses" table.
@@ -146,8 +165,18 @@ var (
 		PrimaryKey: []*schema.Column{DepositAddressesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "depositaddress_chain_address",
+				Name:    "depositaddress_account_chain",
 				Unique:  true,
+				Columns: []*schema.Column{DepositAddressesColumns[1], DepositAddressesColumns[2]},
+			},
+			{
+				Name:    "depositaddress_address",
+				Unique:  true,
+				Columns: []*schema.Column{DepositAddressesColumns[3]},
+			},
+			{
+				Name:    "depositaddress_chain_address",
+				Unique:  false,
 				Columns: []*schema.Column{DepositAddressesColumns[2], DepositAddressesColumns[3]},
 			},
 		},
@@ -194,6 +223,11 @@ var (
 				Name:    "ledgerentry_account_asset",
 				Unique:  false,
 				Columns: []*schema.Column{LedgerEntriesColumns[1], LedgerEntriesColumns[2]},
+			},
+			{
+				Name:    "ledgerentry_ref",
+				Unique:  false,
+				Columns: []*schema.Column{LedgerEntriesColumns[5]},
 			},
 		},
 	}

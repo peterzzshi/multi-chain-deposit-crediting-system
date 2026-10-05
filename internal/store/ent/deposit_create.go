@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/deposit"
 	"errors"
 	"fmt"
@@ -57,7 +58,7 @@ func (_c *DepositCreate) SetAmount(v string) *DepositCreate {
 }
 
 // SetMode sets the "mode" field.
-func (_c *DepositCreate) SetMode(v deposit.Mode) *DepositCreate {
+func (_c *DepositCreate) SetMode(v domain.Mode) *DepositCreate {
 	_c.mutation.SetMode(v)
 	return _c
 }
@@ -308,7 +309,7 @@ func (_c *DepositCreate) check() error {
 		return &ValidationError{Name: "mode", err: errors.New(`ent: missing required field "Deposit.mode"`)}
 	}
 	if v, ok := _c.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(v); err != nil {
+		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}

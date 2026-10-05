@@ -1,7 +1,3 @@
-// Package credit contains the crediting engine, the single ledger writer
-// (ADR 0003): state transition, ledger effect, and balance projection
-// commit in one transaction. Decisions live in the pure domain packages;
-// this package orchestrates persistence.
 package credit
 
 import (
@@ -10,15 +6,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/domain/ledger"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 )
 
-// View is the engine's read model of a deposit row. CreditCycle is the
-// latest posted credit cycle; 0 is the original credit (ADR 0005).
 type View struct {
-	State       deposit.State
+	State       domain.State
 	Chain       string
 	Account     string
 	Asset       string
@@ -27,47 +20,30 @@ type View struct {
 	CreditCycle int
 }
 
-// Balance is the locked account balance projection. Spendable funds are
-// Amount - Held; Held is the exposure-cap hold portion (risk-policy §4).
 type Balance struct {
 	Amount  *big.Int
 	Held    *big.Int
 	Flagged bool
 }
 
-// Tx is the engine's view of one database transaction. Implementations
-// serialize per (account, asset), e.g. with a row lock on account_balances
-// (ADR 0003).
 type Tx interface {
 	DepositForUpdate(ctx context.Context, transferID string) (View, error)
-	SetDepositState(ctx context.Context, transferID string, state deposit.State) error
-	// InsertEntry fails with errs.ErrDuplicateRef when the ref exists.
-	InsertEntry(ctx context.Context, e ledger.Entry) error
+	SetDepositState(ctx context.Context, transferID string, state domain.State) error
+	InsertEntry(ctx context.Context, e domain.Entry) error
 	HasEntry(ctx context.Context, ref string) (bool, error)
-	// A missing balance row reads as zeroed Balance.
 	BalanceForUpdate(ctx context.Context, account, asset string) (Balance, error)
 	SetBalance(ctx context.Context, account, asset string, balance *big.Int, flagged bool) error
-	// HoldsActive reports whether the exposure monitor is holding new
-	// credits for (chain, asset), and the tier above which holds apply
-	// (nil tier = hold all credits while active).
 	HoldsActive(ctx context.Context, chain, asset string) (active bool, tier *big.Int, err error)
-	// SetHeld marks a credited deposit non-spendable and adds the amount
-	// to the account's held projection.
 	SetHeld(ctx context.Context, transferID, account, asset string, amount *big.Int) error
-	// ClearHeld releases a held deposit: the deposit is spendable (or
-	// gone) and the amount leaves the held projection.
 	ClearHeld(ctx context.Context, transferID, account, asset string, amount *big.Int) error
 	SetReorgedHeight(ctx context.Context, transferID string, height uint64) error
 	SetCreditCycle(ctx context.Context, transferID string, cycle int) error
 }
 
-// Store is the persistence boundary the engine needs; implemented by
-// internal/store. Consumers never see ent types.
 type Store interface {
 	InTx(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error
 }
 
-// Engine is stateless; all serialization happens at the database boundary.
 type Engine struct {
 	store Store
 }
@@ -76,31 +52,29 @@ func NewEngine(s Store) *Engine {
 	return &Engine{store: s}
 }
 
-// Apply commits one deposit event's state change and ledger effect
-// atomically. Redeliveries are no-ops (the machine maps them to identity
-// transitions), so callers may retry freely. Opening a deposit
-// (EventObserved / EventObservedBelowMinimum) is the ingest layer's job.
-func (e *Engine) Apply(ctx context.Context, transferID string, ev deposit.Event) error {
+const recreditPrefix = "recredit:"
+
+func (e *Engine) Apply(ctx context.Context, transferID string, ev domain.Event) error {
 	return e.store.InTx(ctx, func(ctx context.Context, tx Tx) error {
 		dep, err := tx.DepositForUpdate(ctx, transferID)
 		if err != nil {
 			return fmt.Errorf("credit: load deposit: %w", err)
 		}
-		next, effect, err := deposit.Transition(dep.State, ev)
+		next, effect, err := domain.Transition(dep.State, ev)
 		if err != nil {
 			return fmt.Errorf("credit: apply %s to %s: %w", ev, transferID, err)
 		}
 		switch effect {
-		case deposit.EffectCredit:
+		case domain.EffectCredit:
 			if err := creditFunds(ctx, tx, dep, transferID); err != nil {
 				return err
 			}
-		case deposit.EffectReverse:
-			original, err := ledger.New(ledger.Credit, dep.Account, dep.Asset, dep.Amount, creditRef(transferID, dep.CreditCycle))
+		case domain.EffectReverse:
+			original, err := domain.New(domain.Credit, dep.Account, dep.Asset, dep.Amount, creditRef(transferID, dep.CreditCycle))
 			if err != nil {
 				return fmt.Errorf("credit: rebuild credit: %w", err)
 			}
-			reversal, err := ledger.Reverse(original)
+			reversal, err := domain.Reverse(original)
 			if err != nil {
 				return fmt.Errorf("credit: build reversal: %w", err)
 			}
@@ -108,8 +82,7 @@ func (e *Engine) Apply(ctx context.Context, transferID string, ev deposit.Event)
 				return err
 			}
 			if dep.Held {
-				// A held deposit that is reversed must release its hold,
-				// or the held projection leaks.
+				// Reversal must release the hold projection.
 				if err := tx.ClearHeld(ctx, transferID, dep.Account, dep.Asset, dep.Amount); err != nil {
 					return err
 				}
@@ -122,15 +95,14 @@ func (e *Engine) Apply(ctx context.Context, transferID string, ev deposit.Event)
 	})
 }
 
-// ApplyReorg transitions a deposit to REORGED and sets its reorg-window
-// timestamp in one transaction — a crash cannot leave one without the other.
+// ApplyReorg atomically marks a deposit REORGED and starts its reorg window.
 func (e *Engine) ApplyReorg(ctx context.Context, transferID string, head uint64) error {
 	return e.store.InTx(ctx, func(ctx context.Context, tx Tx) error {
 		dep, err := tx.DepositForUpdate(ctx, transferID)
 		if err != nil {
 			return fmt.Errorf("credit: load deposit: %w", err)
 		}
-		next, _, err := deposit.Transition(dep.State, deposit.EventReorgedOut)
+		next, _, err := domain.Transition(dep.State, domain.EventReorgedOut)
 		if err != nil {
 			return fmt.Errorf("credit: reorg out %s: %w", transferID, err)
 		}
@@ -144,26 +116,22 @@ func (e *Engine) ApplyReorg(ctx context.Context, transferID string, head uint64)
 	})
 }
 
-// creditRef is the ledger ref of a credit cycle: the transfer ID for the
-// original credit, a derived ref for re-credits.
+// creditRef returns the ledger reference for a credit cycle.
 func creditRef(transferID string, cycle int) string {
 	if cycle == 0 {
 		return transferID
 	}
-	return fmt.Sprintf("recredit:%s:%d", transferID, cycle)
+	return fmt.Sprintf("%s%s:%d", recreditPrefix, transferID, cycle)
 }
 
-// creditFunds executes EffectCredit. An intact latest-cycle credit is a
-// no-op; a reversed one re-credits under a new per-cycle ref, so repeated
-// reversal/re-credit cycles stay safe (ADR 0005). Credits always post —
-// an active exposure cap only holds spendability (risk-policy §4).
+// creditFunds applies an idempotent credit, creating a new cycle after reversal.
 func creditFunds(ctx context.Context, tx Tx, dep View, transferID string) error {
 	credited, err := tx.HasEntry(ctx, transferID)
 	if err != nil {
 		return fmt.Errorf("credit: check entry %s: %w", transferID, err)
 	}
 	if !credited {
-		if err := postNew(ctx, tx, ledger.Credit, dep, transferID); err != nil {
+		if err := postNew(ctx, tx, domain.Credit, dep, transferID); err != nil {
 			return err
 		}
 		return holdIfCapped(ctx, tx, dep, transferID)
@@ -177,7 +145,7 @@ func creditFunds(ctx context.Context, tx Tx, dep View, transferID string) error 
 		return nil
 	}
 	cycle := dep.CreditCycle + 1
-	if err := postNew(ctx, tx, ledger.Credit, dep, creditRef(transferID, cycle)); errors.Is(err, errs.ErrDuplicateRef) {
+	if err := postNew(ctx, tx, domain.Credit, dep, creditRef(transferID, cycle)); errors.Is(err, errs.ErrDuplicateRef) {
 		return nil // re-credit already posted
 	} else if err != nil {
 		return err
@@ -203,7 +171,7 @@ func holdIfCapped(ctx context.Context, tx Tx, dep View, transferID string) error
 // funds (balance - held). Ref is the idempotency key: retrying with the
 // same ref is a silent no-op.
 func (e *Engine) Debit(ctx context.Context, account, asset string, amount *big.Int, ref string) error {
-	entry, err := ledger.New(ledger.Debit, account, asset, amount, ref)
+	entry, err := domain.New(domain.Debit, account, asset, amount, ref)
 	if err != nil {
 		return fmt.Errorf("credit: build debit: %w", err)
 	}
@@ -221,10 +189,10 @@ func (e *Engine) Debit(ctx context.Context, account, asset string, amount *big.I
 			return fmt.Errorf("credit: insert debit %s: %w", entry.Ref, err)
 		}
 		available := new(big.Int).Sub(bal.Amount, bal.Held)
-		if _, err := ledger.Apply(available, entry); err != nil {
+		if _, err := domain.Apply(available, entry); err != nil {
 			return err
 		}
-		next, err := ledger.Apply(bal.Amount, entry) // safe: balance >= available >= amount
+		next, err := domain.Apply(bal.Amount, entry) // safe: balance >= available >= amount
 		if err != nil {
 			return err
 		}
@@ -235,17 +203,16 @@ func (e *Engine) Debit(ctx context.Context, account, asset string, amount *big.I
 	})
 }
 
-func postNew(ctx context.Context, tx Tx, typ ledger.TransactionType, dep View, ref string) error {
-	entry, err := ledger.New(typ, dep.Account, dep.Asset, dep.Amount, ref)
+func postNew(ctx context.Context, tx Tx, typ domain.TransactionType, dep View, ref string) error {
+	entry, err := domain.New(typ, dep.Account, dep.Asset, dep.Amount, ref)
 	if err != nil {
 		return fmt.Errorf("credit: build entry: %w", err)
 	}
 	return post(ctx, tx, entry)
 }
 
-// post appends an entry and folds it into the balance; the account flag
-// follows the balance sign (ADR 0002).
-func post(ctx context.Context, tx Tx, entry ledger.Entry) error {
+// post appends an entry and updates the balance projection.
+func post(ctx context.Context, tx Tx, entry domain.Entry) error {
 	if err := tx.InsertEntry(ctx, entry); err != nil {
 		return fmt.Errorf("credit: insert %s %s: %w", entry.Type, entry.Ref, err)
 	}
@@ -253,7 +220,7 @@ func post(ctx context.Context, tx Tx, entry ledger.Entry) error {
 	if err != nil {
 		return fmt.Errorf("credit: load balance: %w", err)
 	}
-	next, err := ledger.Apply(bal.Amount, entry)
+	next, err := domain.Apply(bal.Amount, entry)
 	if err != nil {
 		return err
 	}

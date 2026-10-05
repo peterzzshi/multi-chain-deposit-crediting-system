@@ -1,0 +1,5 @@
+.git
+.codegraph
+.idea
+**/*_test.go
+tmp

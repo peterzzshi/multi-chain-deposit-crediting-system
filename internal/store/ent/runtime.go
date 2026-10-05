@@ -159,7 +159,7 @@ func init() {
 	// depositaddress.AddressValidator is a validator for the "address" field. It is called by the builders before save.
 	depositaddress.AddressValidator = depositaddressDescAddress.Validators[0].(func(string) error)
 	// depositaddressDescActive is the schema descriptor for active field.
-	depositaddressDescActive := depositaddressFields[4].Descriptor()
+	depositaddressDescActive := depositaddressFields[3].Descriptor()
 	// depositaddress.DefaultActive holds the default value on creation for the active field.
 	depositaddress.DefaultActive = depositaddressDescActive.Default.(bool)
 	exposurestateFields := schema.ExposureState{}.Fields()

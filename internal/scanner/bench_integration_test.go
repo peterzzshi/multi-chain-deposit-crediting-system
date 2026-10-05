@@ -11,13 +11,12 @@ import (
 	"math/big"
 	"testing"
 
-	"deposit-crediting/internal/adapters/chain"
-	"deposit-crediting/internal/adapters/chain/chaintest"
+	"deposit-crediting/internal/adapters"
+	chaintest "deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/scanner"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
-	"deposit-crediting/internal/store/storetest"
 )
 
 const (
@@ -29,10 +28,10 @@ const (
 // A full pass over a pre-built chain of ~3,000-tx blocks against a
 // 10k-address watch table, with the capacity scenario's 0.1% match rate.
 func BenchmarkScannerFilter(b *testing.B) {
-	client := storetest.OpenDB(b)
+	client := store.OpenDB(b)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
-	c := chaintest.NewChain()
+	c := adapters.NewChain()
 	sc := scanner.New(scanner.Config{ChainID: chainID, StartHeight: 1, MaxBatch: 100}, c, store.NewScannerStore(client), engine)
 
 	if _, err := client.AssetConfig.Create().
@@ -46,7 +45,7 @@ func BenchmarkScannerFilter(b *testing.B) {
 	for i := 0; i < benchWatchedAddrs; i++ {
 		builders = append(builders, client.DepositAddress.Create().
 			SetAccount(fmt.Sprintf("acct-%d", i)).SetChain(chainID).
-			SetAddress(fmt.Sprintf("0xw%05d", i)).SetMode("self_built"))
+			SetAddress(fmt.Sprintf("0xw%05d", i)))
 	}
 	if err := client.DepositAddress.CreateBulk(builders...).Exec(ctx); err != nil {
 		b.Fatalf("seed addresses: %v", err)
@@ -88,10 +87,10 @@ func BenchmarkScannerFilter(b *testing.B) {
 // Rewind + replay of a 10-block-deep reorg, the fast chain's expected
 // reorg shape.
 func BenchmarkScannerReorgReplay(b *testing.B) {
-	client := storetest.OpenDB(b)
+	client := store.OpenDB(b)
 	ctx := context.Background()
 	engine := credit.NewEngine(store.New(client))
-	c := chaintest.NewChain()
+	c := adapters.NewChain()
 	sc := scanner.New(scanner.Config{ChainID: chainID, StartHeight: 1, MaxBatch: 100}, c, store.NewScannerStore(client), engine)
 
 	if _, err := client.AssetConfig.Create().
@@ -102,7 +101,7 @@ func BenchmarkScannerReorgReplay(b *testing.B) {
 		b.Fatalf("seed asset config: %v", err)
 	}
 	if _, err := client.DepositAddress.Create().
-		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).SetMode("self_built").
+		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).
 		Save(ctx); err != nil {
 		b.Fatalf("seed address: %v", err)
 	}

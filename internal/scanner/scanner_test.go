@@ -4,11 +4,11 @@ import (
 	"math/big"
 	"testing"
 
-	"deposit-crediting/internal/adapters/chain"
+	"deposit-crediting/internal/adapters"
 )
 
 func TestTransferTargetsDedupesAndSkips(t *testing.T) {
-	got := transferTargets([]chain.Transfer{
+	got := transferTargets([]adapters.Transfer{
 		{To: "0xa", Amount: big.NewInt(1)},
 		{To: "0xa", Amount: big.NewInt(2)},
 		{To: "0xb", Amount: big.NewInt(3)},

@@ -6,8 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"deposit-crediting/internal/domain/deposit"
-	"deposit-crediting/internal/domain/ledger"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 )
 
@@ -15,7 +14,7 @@ import (
 // error), so behavior-flow tests assert on state, not interactions.
 type fakeStore struct {
 	deposits map[string]View
-	entries  []ledger.Entry
+	entries  []domain.Entry
 	balances map[string]*big.Int
 	held     map[string]*big.Int
 	flagged  map[string]bool
@@ -37,7 +36,7 @@ func newFakeStore() *fakeStore {
 	}
 }
 
-func (f *fakeStore) seed(t *testing.T, transferID string, state deposit.State, amount int64) {
+func (f *fakeStore) seed(t *testing.T, transferID string, state domain.State, amount int64) {
 	t.Helper()
 	f.deposits[transferID] = View{
 		State:   state,
@@ -55,7 +54,7 @@ func (f *fakeStore) InTx(ctx context.Context, fn func(context.Context, Tx) error
 		v.Amount = new(big.Int).Set(v.Amount)
 		snapshot.deposits[k] = v
 	}
-	snapshot.entries = append([]ledger.Entry(nil), f.entries...)
+	snapshot.entries = append([]domain.Entry(nil), f.entries...)
 	snapshot.balances = make(map[string]*big.Int, len(f.balances))
 	for k, v := range f.balances {
 		snapshot.balances[k] = new(big.Int).Set(v)
@@ -85,7 +84,7 @@ func (t *fakeTx) DepositForUpdate(_ context.Context, transferID string) (View, e
 	return v, nil
 }
 
-func (t *fakeTx) SetDepositState(_ context.Context, transferID string, state deposit.State) error {
+func (t *fakeTx) SetDepositState(_ context.Context, transferID string, state domain.State) error {
 	v := t.f.deposits[transferID]
 	v.State = state
 	t.f.deposits[transferID] = v
@@ -103,7 +102,7 @@ func (t *fakeTx) SetCreditCycle(_ context.Context, transferID string, cycle int)
 	return nil
 }
 
-func (t *fakeTx) InsertEntry(_ context.Context, e ledger.Entry) error {
+func (t *fakeTx) InsertEntry(_ context.Context, e domain.Entry) error {
 	for _, existing := range t.f.entries {
 		if existing.Ref == e.Ref {
 			return errs.ErrDuplicateRef
@@ -172,32 +171,32 @@ const testTransfer = "evm:0xabc:native"
 
 func TestApplyCreditThenFinalize(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
-	if got, want := store.deposits[testTransfer].State, deposit.StateCredited; got != want {
+	if got, want := store.deposits[testTransfer].State, domain.StateCredited; got != want {
 		t.Errorf("state after credit = %s; want %s", got, want)
 	}
 	if got, want := len(store.entries), 1; got != want {
 		t.Fatalf("entries after credit = %d; want %d", got, want)
 	}
 	entry := store.entries[0]
-	if entry.Type != ledger.Credit || entry.Ref != testTransfer || entry.Amount.Cmp(big.NewInt(100)) != 0 {
+	if entry.Type != domain.Credit || entry.Ref != testTransfer || entry.Amount.Cmp(big.NewInt(100)) != 0 {
 		t.Errorf("entry = (%s, %s, %s); want (%s, %s, 100)",
-			entry.Type, entry.Ref, entry.Amount, ledger.Credit, testTransfer)
+			entry.Type, entry.Ref, entry.Amount, domain.Credit, testTransfer)
 	}
 	if got, want := store.balances["alice/ETH"].String(), "100"; got != want {
 		t.Errorf("balance = %s; want %s", got, want)
 	}
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventFinalityReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventFinalityReached); err != nil {
 		t.Fatalf("Apply(FINALITY_REACHED) unexpected error: %v", err)
 	}
-	if got, want := store.deposits[testTransfer].State, deposit.StateFinalized; got != want {
+	if got, want := store.deposits[testTransfer].State, domain.StateFinalized; got != want {
 		t.Errorf("state after finalize = %s; want %s", got, want)
 	}
 	if got, want := len(store.entries), 1; got != want {
@@ -207,12 +206,12 @@ func TestApplyCreditThenFinalize(t *testing.T) {
 
 func TestApplyRedeliveryIsNoOp(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+		if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 			t.Fatalf("Apply(DEPTH_REACHED) delivery %d unexpected error: %v", i+1, err)
 		}
 	}
@@ -228,21 +227,21 @@ func TestApplyRedeliveryIsNoOp(t *testing.T) {
 // credited twice: the original entry still holds the funds.
 func TestReincludeWithoutReversalDoesNotDoubleCredit(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	for _, ev := range []deposit.Event{
-		deposit.EventDepthReached,
-		deposit.EventReorgedOut,
-		deposit.EventReincluded,
-		deposit.EventDepthReached,
+	for _, ev := range []domain.Event{
+		domain.EventDepthReached,
+		domain.EventReorgedOut,
+		domain.EventReincluded,
+		domain.EventDepthReached,
 	} {
 		if err := engine.Apply(ctx, testTransfer, ev); err != nil {
 			t.Fatalf("Apply(%s) unexpected error: %v", ev, err)
 		}
 	}
-	if got, want := store.deposits[testTransfer].State, deposit.StateCredited; got != want {
+	if got, want := store.deposits[testTransfer].State, domain.StateCredited; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
 	if got, want := len(store.entries), 1; got != want {
@@ -257,17 +256,17 @@ func TestReincludeWithoutReversalDoesNotDoubleCredit(t *testing.T) {
 // cycle under a per-cycle ref; repeated cycles keep restoring funds.
 func TestRecreditAfterReversalRestoresFunds(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	cycle := []deposit.Event{
-		deposit.EventReorgedOut,
-		deposit.EventWindowExpiredCredited,
-		deposit.EventReincluded,
-		deposit.EventDepthReached,
+	cycle := []domain.Event{
+		domain.EventReorgedOut,
+		domain.EventWindowExpiredCredited,
+		domain.EventReincluded,
+		domain.EventDepthReached,
 	}
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
 	for i := 0; i < 2; i++ {
@@ -277,7 +276,7 @@ func TestRecreditAfterReversalRestoresFunds(t *testing.T) {
 			}
 		}
 	}
-	if got, want := store.deposits[testTransfer].State, deposit.StateCredited; got != want {
+	if got, want := store.deposits[testTransfer].State, domain.StateCredited; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
 	if got, want := store.deposits[testTransfer].CreditCycle, 2; got != want {
@@ -301,7 +300,7 @@ func TestRecreditAfterReversalRestoresFunds(t *testing.T) {
 		t.Errorf("balance = %s; want %s", got, want)
 	}
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) redelivery unexpected error: %v", err)
 	}
 	if got, want := len(store.entries), 5; got != want {
@@ -313,33 +312,33 @@ func TestRecreditAfterReversalRestoresFunds(t *testing.T) {
 // debits.
 func TestReversalAfterSpendFlagsAccount(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
 	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(70), "withdrawal:1"); err != nil {
 		t.Fatalf("Debit() unexpected error: %v", err)
 	}
-	if err := engine.Apply(ctx, testTransfer, deposit.EventReorgedOut); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventReorgedOut); err != nil {
 		t.Fatalf("Apply(REORGED_OUT) unexpected error: %v", err)
 	}
-	if err := engine.Apply(ctx, testTransfer, deposit.EventWindowExpiredCredited); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventWindowExpiredCredited); err != nil {
 		t.Fatalf("Apply(WINDOW_EXPIRED_CREDITED) unexpected error: %v", err)
 	}
 
-	if got, want := store.deposits[testTransfer].State, deposit.StateReversed; got != want {
+	if got, want := store.deposits[testTransfer].State, domain.StateReversed; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
 	if got, want := len(store.entries), 3; got != want {
 		t.Fatalf("entries = %d; want %d (credit, debit, reversal)", got, want)
 	}
 	reversal := store.entries[2]
-	if reversal.Type != ledger.Reversal || reversal.Ref != "reversal:"+testTransfer {
+	if reversal.Type != domain.Reversal || reversal.Ref != "reversal:"+testTransfer {
 		t.Errorf("reversal = (%s, %s); want (%s, reversal:%s)",
-			reversal.Type, reversal.Ref, ledger.Reversal, testTransfer)
+			reversal.Type, reversal.Ref, domain.Reversal, testTransfer)
 	}
 	if got, want := store.balances["alice/ETH"].String(), "-70"; got != want {
 		t.Errorf("balance = %s; want %s", got, want)
@@ -355,11 +354,11 @@ func TestReversalAfterSpendFlagsAccount(t *testing.T) {
 
 func TestDebitInsufficientFundsRollsBack(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
 	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(150), "withdrawal:1"); !errors.Is(err, errs.ErrInsufficientFunds) {
@@ -378,11 +377,11 @@ func TestDebitInsufficientFundsRollsBack(t *testing.T) {
 func TestCreditUnderActiveCapPostsButIsHeld(t *testing.T) {
 	store := newFakeStore()
 	store.holds["evm/ETH"] = holdRule{active: true}
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
 	if got, want := store.balances["alice/ETH"].String(), "100"; got != want {
@@ -392,7 +391,7 @@ func TestCreditUnderActiveCapPostsButIsHeld(t *testing.T) {
 		t.Errorf("held = %s; want %s", got, want)
 	}
 	if !store.deposits[testTransfer].Held {
-		t.Error("deposit.Held = false; want true")
+		t.Error("domain.Held = false; want true")
 	}
 	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(1), "withdrawal:1"); !errors.Is(err, errs.ErrInsufficientFunds) {
 		t.Errorf("Debit() of held funds error = %v; want errs.ErrInsufficientFunds", err)
@@ -402,15 +401,15 @@ func TestCreditUnderActiveCapPostsButIsHeld(t *testing.T) {
 func TestCreditBelowTierStaysSpendable(t *testing.T) {
 	store := newFakeStore()
 	store.holds["evm/ETH"] = holdRule{active: true, tier: big.NewInt(50)}
-	store.seed(t, testTransfer, deposit.StatePending, 30)
+	store.seed(t, testTransfer, domain.StatePending, 30)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	if err := engine.Apply(ctx, testTransfer, deposit.EventDepthReached); err != nil {
+	if err := engine.Apply(ctx, testTransfer, domain.EventDepthReached); err != nil {
 		t.Fatalf("Apply(DEPTH_REACHED) unexpected error: %v", err)
 	}
 	if store.deposits[testTransfer].Held {
-		t.Error("deposit.Held = true for below-tier credit; want false")
+		t.Error("domain.Held = true for below-tier credit; want false")
 	}
 	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(30), "withdrawal:1"); err != nil {
 		t.Errorf("Debit() of below-tier credit unexpected error: %v", err)
@@ -422,14 +421,14 @@ func TestCreditBelowTierStaysSpendable(t *testing.T) {
 func TestReversalOfHeldDepositClearsHold(t *testing.T) {
 	store := newFakeStore()
 	store.holds["evm/ETH"] = holdRule{active: true}
-	store.seed(t, testTransfer, deposit.StatePending, 100)
+	store.seed(t, testTransfer, domain.StatePending, 100)
 	engine := NewEngine(store)
 	ctx := context.Background()
 
-	for _, ev := range []deposit.Event{
-		deposit.EventDepthReached,
-		deposit.EventReorgedOut,
-		deposit.EventWindowExpiredCredited,
+	for _, ev := range []domain.Event{
+		domain.EventDepthReached,
+		domain.EventReorgedOut,
+		domain.EventWindowExpiredCredited,
 	} {
 		if err := engine.Apply(ctx, testTransfer, ev); err != nil {
 			t.Fatalf("Apply(%s) unexpected error: %v", ev, err)
@@ -442,15 +441,15 @@ func TestReversalOfHeldDepositClearsHold(t *testing.T) {
 		t.Errorf("held = %s; want %s (reversal releases the hold)", got, want)
 	}
 	if store.deposits[testTransfer].Held {
-		t.Error("deposit.Held = true after reversal; want false")
+		t.Error("domain.Held = true after reversal; want false")
 	}
 }
 
 func TestApplyIllegalEventFailsLoudly(t *testing.T) {
 	store := newFakeStore()
-	store.seed(t, testTransfer, deposit.StateFinalized, 100)
+	store.seed(t, testTransfer, domain.StateFinalized, 100)
 	engine := NewEngine(store)
-	if err := engine.Apply(context.Background(), testTransfer, deposit.EventReorgedOut); !errors.Is(err, errs.ErrIllegalTransition) {
+	if err := engine.Apply(context.Background(), testTransfer, domain.EventReorgedOut); !errors.Is(err, errs.ErrIllegalTransition) {
 		t.Errorf("Apply(REORGED_OUT on FINALIZED) error = %v; want errs.ErrIllegalTransition", err)
 	}
 }

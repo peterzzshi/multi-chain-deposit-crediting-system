@@ -31,5 +31,6 @@ func (LedgerEntry) Fields() []ent.Field {
 func (LedgerEntry) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("account", "asset"),
+		index.Fields("ref"), // duplicate detection performance
 	}
 }

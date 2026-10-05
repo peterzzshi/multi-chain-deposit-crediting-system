@@ -11,15 +11,14 @@ import (
 	"math/big"
 	"testing"
 
-	"deposit-crediting/internal/adapters/chain/chaintest"
+	chaintest "deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/risk"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-	"deposit-crediting/internal/store/storetest"
 )
 
 const chainID = "evm"
@@ -35,7 +34,7 @@ type fixture struct {
 // Cap 150, no tier: holds apply to every credit during a breach.
 func newFixture(t *testing.T, cap, tier string) *fixture {
 	t.Helper()
-	client := storetest.OpenDB(t)
+	client := store.OpenDB(t)
 	f := &fixture{t: t, ctx: context.Background(), client: client}
 	f.engine = credit.NewEngine(store.New(client))
 	f.mon = risk.NewMonitor(risk.Config{ChainID: chainID}, store.NewRiskStore(client))
@@ -55,7 +54,7 @@ func newFixture(t *testing.T, cap, tier string) *fixture {
 
 func (f *fixture) creditDeposit(transferID string, amount int64) {
 	f.t.Helper()
-	state, _, err := deposit.Transition(deposit.StateNone, deposit.EventObserved)
+	state, _, err := domain.Transition(domain.StateNone, domain.EventObserved)
 	if err != nil {
 		f.t.Fatalf("Transition(OBSERVED) unexpected error: %v", err)
 	}
@@ -63,12 +62,12 @@ func (f *fixture) creditDeposit(transferID string, amount int64) {
 	if _, err := f.client.Deposit.Create().
 		SetTransferID(transferID).SetChain(chainID).SetAsset("ETH").
 		SetAccount("alice").SetAddress("0xdeposit").SetAmount(amountStr).
-		SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.State(state)).
+		SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.State(state)).
 		SetBlockHeight(1).SetBlockHash("0xb1").
 		Save(f.ctx); err != nil {
 		f.t.Fatalf("open deposit %s: %v", transferID, err)
 	}
-	if err := f.engine.Apply(f.ctx, transferID, deposit.EventDepthReached); err != nil {
+	if err := f.engine.Apply(f.ctx, transferID, domain.EventDepthReached); err != nil {
 		f.t.Fatalf("credit %s: %v", transferID, err)
 	}
 }
@@ -84,7 +83,7 @@ func (f *fixture) balance() (amount, held string) {
 
 func (f *fixture) depositHeld(transferID string) bool {
 	f.t.Helper()
-	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(transferID)).Only(f.ctx)
+	row, err := f.client.Deposit.Query().Where(entdomain.TransferID(transferID)).Only(f.ctx)
 	if err != nil {
 		f.t.Fatalf("query deposit %s: %v", transferID, err)
 	}
@@ -128,7 +127,7 @@ func TestExposureCapHoldsNewCreditsAndReleasesOnDrain(t *testing.T) {
 	// Finalizations drain exposure below the release threshold: holds
 	// lift and the held deposit becomes spendable.
 	for _, id := range []string{"evm:0xa:native", "evm:0xb:native"} {
-		if err := f.engine.Apply(f.ctx, id, deposit.EventFinalityReached); err != nil {
+		if err := f.engine.Apply(f.ctx, id, domain.EventFinalityReached); err != nil {
 			t.Fatalf("finalize %s: %v", id, err)
 		}
 	}
@@ -173,7 +172,7 @@ func TestExposureCapHoldsOnlyAboveTier(t *testing.T) {
 func TestInvariantMonitorsFireOnInjectedFaults(t *testing.T) {
 	f := newFixture(t, "1000", "")
 	f.creditDeposit("evm:0xa:native", 100)
-	chain := chaintest.NewChain()
+	chain := adapters.NewChain()
 	checker := risk.NewInvariantChecker(chainID, chain, store.NewRiskStore(f.client))
 
 	chain.AddBlock()
@@ -185,13 +184,13 @@ func TestInvariantMonitorsFireOnInjectedFaults(t *testing.T) {
 	if _, err := f.client.Deposit.Create().
 		SetTransferID("evm:0xmissed:native").SetChain(chainID).SetAsset("ETH").
 		SetAccount("bob").SetAddress("0xdep2").SetAmount("10").
-		SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.StateCREDITED).
+		SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.StateCREDITED).
 		SetBlockHeight(1).SetBlockHash("0xb1").
 		Save(f.ctx); err != nil {
 		t.Fatalf("inject missed credit: %v", err)
 	}
 
-	// Fault 2: the balance projection drifts from the ledger.
+	// Fault 2: the balance projection drifts from the domain.
 	if err := f.client.AccountBalance.Update().
 		SetBalance("70").
 		Exec(f.ctx); err != nil {
@@ -203,7 +202,7 @@ func TestInvariantMonitorsFireOnInjectedFaults(t *testing.T) {
 	if _, err := f.client.Deposit.Create().
 		SetTransferID("evm:0xstuck:native").SetChain(chainID).SetAsset("ETH").
 		SetAccount("carol").SetAddress("0xdep3").SetAmount("10").
-		SetMode(entdeposit.ModeSelfBuilt).SetState(entdeposit.StateREORGED).
+		SetMode(entdomain.ModeSelfBuilt).SetState(entdomain.StateREORGED).
 		SetBlockHeight(1).SetBlockHash("0xb1").
 		SetReorgedHeight(h).
 		Save(f.ctx); err != nil {

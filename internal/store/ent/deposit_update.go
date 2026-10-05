@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/predicate"
 	"errors"
@@ -99,13 +100,13 @@ func (_u *DepositUpdate) SetNillableAmount(v *string) *DepositUpdate {
 }
 
 // SetMode sets the "mode" field.
-func (_u *DepositUpdate) SetMode(v deposit.Mode) *DepositUpdate {
+func (_u *DepositUpdate) SetMode(v domain.Mode) *DepositUpdate {
 	_u.mutation.SetMode(v)
 	return _u
 }
 
 // SetNillableMode sets the "mode" field if the given value is not nil.
-func (_u *DepositUpdate) SetNillableMode(v *deposit.Mode) *DepositUpdate {
+func (_u *DepositUpdate) SetNillableMode(v *domain.Mode) *DepositUpdate {
 	if v != nil {
 		_u.SetMode(*v)
 	}
@@ -345,7 +346,7 @@ func (_u *DepositUpdate) check() error {
 		}
 	}
 	if v, ok := _u.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(v); err != nil {
+		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}
@@ -529,13 +530,13 @@ func (_u *DepositUpdateOne) SetNillableAmount(v *string) *DepositUpdateOne {
 }
 
 // SetMode sets the "mode" field.
-func (_u *DepositUpdateOne) SetMode(v deposit.Mode) *DepositUpdateOne {
+func (_u *DepositUpdateOne) SetMode(v domain.Mode) *DepositUpdateOne {
 	_u.mutation.SetMode(v)
 	return _u
 }
 
 // SetNillableMode sets the "mode" field if the given value is not nil.
-func (_u *DepositUpdateOne) SetNillableMode(v *deposit.Mode) *DepositUpdateOne {
+func (_u *DepositUpdateOne) SetNillableMode(v *domain.Mode) *DepositUpdateOne {
 	if v != nil {
 		_u.SetMode(*v)
 	}
@@ -788,7 +789,7 @@ func (_u *DepositUpdateOne) check() error {
 		}
 	}
 	if v, ok := _u.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(v); err != nil {
+		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}

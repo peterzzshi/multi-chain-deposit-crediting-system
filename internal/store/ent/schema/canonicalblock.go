@@ -25,5 +25,6 @@ func (CanonicalBlock) Fields() []ent.Field {
 func (CanonicalBlock) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("chain", "height").Unique(),
+		index.Fields("chain"), // reorg walk-back queries
 	}
 }

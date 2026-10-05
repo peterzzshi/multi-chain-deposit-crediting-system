@@ -13,16 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"deposit-crediting/internal/adapters/chain"
-	"deposit-crediting/internal/adapters/chain/chaintest"
+	"deposit-crediting/internal/adapters"
+	chaintest "deposit-crediting/internal/adapters"
 	"deposit-crediting/internal/credit"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/scanner"
 	"deposit-crediting/internal/store"
 	"deposit-crediting/internal/store/ent"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
-	"deposit-crediting/internal/store/storetest"
 )
 
 const (
@@ -38,13 +37,13 @@ type fixture struct {
 	ctx    context.Context
 	client *ent.Client
 	engine *credit.Engine
-	chain  *chaintest.Chain
+	chain  *adapters.Chain
 	sc     *scanner.Scanner
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	f := &fixture{t: t, ctx: context.Background(), client: storetest.OpenDB(t), chain: chaintest.NewChain()}
+	f := &fixture{t: t, ctx: context.Background(), client: store.OpenDB(t), chain: adapters.NewChain()}
 	f.engine = credit.NewEngine(store.New(f.client))
 	f.sc = scanner.New(
 		scanner.Config{ChainID: chainID, StartHeight: 1, MaxBatch: 100},
@@ -58,7 +57,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("seed asset config: %v", err)
 	}
 	if _, err := f.client.DepositAddress.Create().
-		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).SetMode("self_built").
+		SetAccount("alice").SetChain(chainID).SetAddress(aliceAddr).
 		Save(f.ctx); err != nil {
 		t.Fatalf("seed address: %v", err)
 	}
@@ -83,13 +82,13 @@ func (f *fixture) tick() {
 	}
 }
 
-func (f *fixture) state(transferID string) deposit.State {
+func (f *fixture) state(transferID string) domain.State {
 	f.t.Helper()
-	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(transferID)).Only(f.ctx)
+	row, err := f.client.Deposit.Query().Where(entdomain.TransferID(transferID)).Only(f.ctx)
 	if err != nil {
 		f.t.Fatalf("query deposit %s: %v", transferID, err)
 	}
-	return deposit.State(row.State)
+	return domain.State(row.State)
 }
 
 func (f *fixture) depositCount() int {
@@ -130,7 +129,7 @@ func TestScannerBlockHashOutageDoesNotMutate(t *testing.T) {
 	f := newFixture(t)
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.tick()
-	if got := f.state(testTransID); got != deposit.StatePending {
+	if got := f.state(testTransID); got != domain.StatePending {
 		t.Fatalf("state = %s; want PENDING", got)
 	}
 
@@ -138,7 +137,7 @@ func TestScannerBlockHashOutageDoesNotMutate(t *testing.T) {
 	if err := f.sc.Tick(f.ctx); err == nil {
 		t.Fatal("Tick() during outage = nil error; want error")
 	}
-	if got := f.state(testTransID); got != deposit.StatePending {
+	if got := f.state(testTransID); got != domain.StatePending {
 		t.Errorf("state during outage = %s; want PENDING (no reorg mutation)", got)
 	}
 	cursor, _, err := store.NewScannerStore(f.client).Cursor(f.ctx, chainID)
@@ -152,7 +151,7 @@ func TestScannerBlockHashOutageDoesNotMutate(t *testing.T) {
 	f.chain.BlockHashErr = nil
 	f.addBlocks(2)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+	if got, want := f.state(testTransID), domain.StateCredited; got != want {
 		t.Errorf("state after recovery = %s; want %s", got, want)
 	}
 }
@@ -166,7 +165,7 @@ func TestScannerReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.addBlocks(2)
 	f.tick()
-	if got := f.state(testTransID); got != deposit.StateCredited {
+	if got := f.state(testTransID); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 
@@ -175,18 +174,18 @@ func TestScannerReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 	f.tick()
 	f.addBlocks(4) // window (4) elapses
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateReversed; got != want {
+	if got, want := f.state(testTransID), domain.StateReversed; got != want {
 		t.Fatalf("state = %s; want %s", got, want)
 	}
 
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100)) // re-mined on the canonical branch
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StatePending; got != want {
+	if got, want := f.state(testTransID), domain.StatePending; got != want {
 		t.Fatalf("state after re-inclusion = %s; want %s", got, want)
 	}
 	f.addBlocks(2)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+	if got, want := f.state(testTransID), domain.StateCredited; got != want {
 		t.Fatalf("state after new cycle depth = %s; want %s", got, want)
 	}
 
@@ -203,7 +202,7 @@ func TestScannerReinclusionAfterReversalOpensNewCycle(t *testing.T) {
 	if balance, _ := f.balance("alice", "ETH"); balance != "100" {
 		t.Errorf("balance = %s; want 100 (re-credit restored funds)", balance)
 	}
-	row, err := f.client.Deposit.Query().Where(entdeposit.TransferID(testTransID)).Only(f.ctx)
+	row, err := f.client.Deposit.Query().Where(entdomain.TransferID(testTransID)).Only(f.ctx)
 	if err != nil {
 		t.Fatalf("query deposit: %v", err)
 	}
@@ -255,13 +254,13 @@ func TestScannerCreditsAndFinalizes(t *testing.T) {
 	f.chain.AddBlock()
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StatePending; got != want {
+	if got, want := f.state(testTransID), domain.StatePending; got != want {
 		t.Fatalf("state at depth 1 = %s; want %s", got, want)
 	}
 
 	f.addBlocks(2) // head 5: depth 3
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+	if got, want := f.state(testTransID), domain.StateCredited; got != want {
 		t.Fatalf("state at depth 3 = %s; want %s", got, want)
 	}
 	balance, flagged := f.balance("alice", "ETH")
@@ -271,7 +270,7 @@ func TestScannerCreditsAndFinalizes(t *testing.T) {
 
 	f.addBlocks(2) // head 7: depth 5
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateFinalized; got != want {
+	if got, want := f.state(testTransID), domain.StateFinalized; got != want {
 		t.Errorf("state at depth 5 = %s; want %s", got, want)
 	}
 	if got, want := len(f.entryRefs()), 1; got != want {
@@ -283,12 +282,12 @@ func TestScannerBelowMinimum(t *testing.T) {
 	f := newFixture(t)
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 5)) // min is 10
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateBelowMinimum; got != want {
+	if got, want := f.state(testTransID), domain.StateBelowMinimum; got != want {
 		t.Fatalf("state = %s; want %s", got, want)
 	}
 	f.addBlocks(6)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateBelowMinimum; got != want {
+	if got, want := f.state(testTransID), domain.StateBelowMinimum; got != want {
 		t.Errorf("state after more blocks = %s; want %s (absorbing)", got, want)
 	}
 	if got := f.depositCount(); got != 1 {
@@ -305,20 +304,20 @@ func TestScannerReorgBeforeCreditDrops(t *testing.T) {
 	f.chain.AddBlock()
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.tick() // head 3: depth 1, still pending
-	if got := f.state(testTransID); got != deposit.StatePending {
+	if got := f.state(testTransID); got != domain.StatePending {
 		t.Fatalf("state = %s; want PENDING", got)
 	}
 
 	f.chain.Reorg(1) // orphan block 3, transfer gone
 	f.addBlocks(1)   // replacement branch, head 3
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateReorged; got != want {
+	if got, want := f.state(testTransID), domain.StateReorged; got != want {
 		t.Fatalf("state after reorg = %s; want %s", got, want)
 	}
 
 	f.addBlocks(4) // head 7: reorg window (4) elapsed
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateDropped; got != want {
+	if got, want := f.state(testTransID), domain.StateDropped; got != want {
 		t.Errorf("state after window = %s; want %s", got, want)
 	}
 	if got := len(f.entryRefs()); got != 0 {
@@ -335,7 +334,7 @@ func TestScannerDeepReorgReversesCredit(t *testing.T) {
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.addBlocks(2)
 	f.tick()
-	if got := f.state(testTransID); got != deposit.StateCredited {
+	if got := f.state(testTransID); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 	if err := f.engine.Debit(f.ctx, "alice", "ETH", big.NewInt(70), "withdrawal:1"); err != nil {
@@ -345,13 +344,13 @@ func TestScannerDeepReorgReversesCredit(t *testing.T) {
 	f.chain.Reorg(3)
 	f.addBlocks(3)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateReorged; got != want {
+	if got, want := f.state(testTransID), domain.StateReorged; got != want {
 		t.Fatalf("state after reorg = %s; want %s", got, want)
 	}
 
 	f.addBlocks(4)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateReversed; got != want {
+	if got, want := f.state(testTransID), domain.StateReversed; got != want {
 		t.Errorf("state after window = %s; want %s", got, want)
 	}
 	balance, flagged := f.balance("alice", "ETH")
@@ -372,7 +371,7 @@ func TestScannerReinclusionKeepsSingleCredit(t *testing.T) {
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.addBlocks(2)
 	f.tick()
-	if got := f.state(testTransID); got != deposit.StateCredited {
+	if got := f.state(testTransID); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 
@@ -381,7 +380,7 @@ func TestScannerReinclusionKeepsSingleCredit(t *testing.T) {
 	f.addBlocks(2)
 	f.tick()
 
-	if got, want := f.state(testTransID), deposit.StateCredited; got != want {
+	if got, want := f.state(testTransID), domain.StateCredited; got != want {
 		t.Errorf("state after re-inclusion = %s; want %s", got, want)
 	}
 	balance, _ := f.balance("alice", "ETH")
@@ -399,7 +398,7 @@ func TestScannerRestartIsIdempotent(t *testing.T) {
 	f.chain.AddBlock(nativeTransfer(testTxHash, aliceAddr, 100))
 	f.addBlocks(2)
 	f.tick()
-	if got := f.state(testTransID); got != deposit.StateCredited {
+	if got := f.state(testTransID); got != domain.StateCredited {
 		t.Fatalf("state = %s; want CREDITED", got)
 	}
 
@@ -410,7 +409,7 @@ func TestScannerRestartIsIdempotent(t *testing.T) {
 	f.tick() // no new blocks: pure redelivery
 	f.addBlocks(2)
 	f.tick()
-	if got, want := f.state(testTransID), deposit.StateFinalized; got != want {
+	if got, want := f.state(testTransID), domain.StateFinalized; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
 	if got, want := len(f.entryRefs()), 1; got != want {
@@ -420,13 +419,20 @@ func TestScannerRestartIsIdempotent(t *testing.T) {
 
 func TestScannerSkipsUnsupportedAndCustodian(t *testing.T) {
 	f := newFixture(t)
+	if _, err := f.client.AssetConfig.Create().
+		SetChain(chainID).SetAsset("USDT").SetDecimals(6).
+		SetMode("custodian").SetMinAmount("10").
+		SetNCredit(3).SetNFinalize(5).SetReorgWindow(4).
+		Save(f.ctx); err != nil {
+		t.Fatalf("seed custodian asset config: %v", err)
+	}
 	if _, err := f.client.DepositAddress.Create().
-		SetAccount("bob").SetChain(chainID).SetAddress("0xbob").SetMode("custodian").
+		SetAccount("bob").SetChain(chainID).SetAddress("0xbob").
 		Save(f.ctx); err != nil {
 		t.Fatalf("seed custodian address: %v", err)
 	}
 	f.chain.AddBlock(
-		nativeTransfer("0xt1", "0xbob", 100),     // custodian-mode address
+		chain.Transfer{Kind: chain.Token, TxHash: "0xt1", To: "0xbob", Asset: "USDT", Amount: big.NewInt(100)}, // custodian-mode asset
 		nativeTransfer(testTxHash, aliceAddr, 5), // below min; block still processed
 		chain.Transfer{Kind: chain.Native, TxHash: "0xt2", To: aliceAddr, Asset: "USDT", Amount: big.NewInt(100)}, // no config
 	)
@@ -434,7 +440,7 @@ func TestScannerSkipsUnsupportedAndCustodian(t *testing.T) {
 	if got, want := f.depositCount(), 1; got != want {
 		t.Errorf("deposits = %d; want %d (only the self-built ETH one)", got, want)
 	}
-	if got, want := f.state(testTransID), deposit.StateBelowMinimum; got != want {
+	if got, want := f.state(testTransID), domain.StateBelowMinimum; got != want {
 		t.Errorf("state = %s; want %s", got, want)
 	}
 }

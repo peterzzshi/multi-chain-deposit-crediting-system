@@ -814,13 +814,13 @@ func NewDepositClient(c config) *DepositClient {
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `deposit.Hooks(f(g(h())))`.
+// A call to `Use(f, g, h)` equals to `domain.Hooks(f(g(h())))`.
 func (c *DepositClient) Use(hooks ...Hook) {
 	c.hooks.Deposit = append(c.hooks.Deposit, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `deposit.Intercept(f(g(h())))`.
+// A call to `Intercept(f, g, h)` equals to `domain.Intercept(f(g(h())))`.
 func (c *DepositClient) Intercept(interceptors ...Interceptor) {
 	c.inters.Deposit = append(c.inters.Deposit, interceptors...)
 }
@@ -882,7 +882,7 @@ func (c *DepositClient) DeleteOne(_m *Deposit) *DepositDeleteOne {
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
 func (c *DepositClient) DeleteOneID(id int) *DepositDeleteOne {
-	builder := c.Delete().Where(deposit.ID(id))
+	builder := c.Delete().Where(deposit.IDEQ(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
 	return &DepositDeleteOne{builder}
@@ -899,7 +899,7 @@ func (c *DepositClient) Query() *DepositQuery {
 
 // Get returns a Deposit entity by its id.
 func (c *DepositClient) Get(ctx context.Context, id int) (*Deposit, error) {
-	return c.Query().Where(deposit.ID(id)).Only(ctx)
+	return c.Query().Where(deposit.IDEQ(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.

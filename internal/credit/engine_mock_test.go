@@ -7,7 +7,7 @@ import (
 
 	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/credit/mocks"
-	"deposit-crediting/internal/domain/deposit"
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 
 	"github.com/stretchr/testify/mock"
@@ -29,7 +29,7 @@ func TestApplyUnknownDeposit(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	store.On("InTx", mock.Anything, mock.Anything).Return(runInTx(txMock))
 
-	err := credit.NewEngine(store).Apply(context.Background(), "evm:0xdead:native", deposit.EventDepthReached)
+	err := credit.NewEngine(store).Apply(context.Background(), "evm:0xdead:native", domain.EventDepthReached)
 	require.ErrorIs(t, err, errs.ErrDepositNotFound)
 }
 

@@ -8,9 +8,7 @@ import (
 	"time"
 )
 
-// Discrepancy is a solvency violation: the ledger says users hold more of
-// an asset than the custodian's vault holds (ADR 0004 — the vault is the
-// backing for custodian-mode credits).
+// Discrepancy reports a ledger total above the custodian vault total.
 type Discrepancy struct {
 	Chain       string
 	Asset       string
@@ -18,9 +16,7 @@ type Discrepancy struct {
 	VaultTotal  *big.Int
 }
 
-// SolvencyChecker compares the platform's ledger totals against the
-// custodian's vault totals. It runs on the reconciliation cadence; a
-// discrepancy is an alert, never a credit action.
+// SolvencyChecker compares ledger and vault totals.
 type SolvencyChecker struct {
 	cfg      Config
 	provider Provider
@@ -34,6 +30,11 @@ func NewSolvencyChecker(cfg Config, p Provider, st Store, interval time.Duration
 
 // Run checks until ctx is done; failures are logged and retried.
 func (s *SolvencyChecker) Run(ctx context.Context) error {
+	if s.interval <= 0 {
+		return fmt.Errorf("solvency: interval must be positive")
+	}
+	ticker := time.NewTicker(s.interval)
+	defer ticker.Stop()
 	for {
 		discrepancies, err := s.Check(ctx)
 		if err != nil {
@@ -47,7 +48,7 @@ func (s *SolvencyChecker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(s.interval):
+		case <-ticker.C:
 		}
 	}
 }
@@ -55,23 +56,23 @@ func (s *SolvencyChecker) Run(ctx context.Context) error {
 // Check returns one Discrepancy per (chain, asset) where the ledger total
 // exceeds the vault total.
 func (s *SolvencyChecker) Check(ctx context.Context) ([]Discrepancy, error) {
-	configs, err := s.store.AssetConfigs(ctx, s.cfg.ChainID)
+	configs, err := s.store.AssetConfigs(ctx, string(s.cfg.ChainID))
 	if err != nil {
 		return nil, fmt.Errorf("solvency: asset configs: %w", err)
 	}
 	var out []Discrepancy
 	for _, cfg := range configs {
-		ledger, err := s.store.LedgerTotal(ctx, s.cfg.ChainID, cfg.Asset)
+		ledger, err := s.store.LedgerTotal(ctx, string(s.cfg.ChainID), cfg.Asset)
 		if err != nil {
 			return nil, fmt.Errorf("solvency: ledger total %s: %w", cfg.Asset, err)
 		}
-		vault, err := s.provider.FetchVaultTotal(ctx, s.cfg.ChainID, cfg.Asset)
+		vault, err := s.provider.FetchVaultTotal(ctx, string(s.cfg.ChainID), cfg.Asset)
 		if err != nil {
 			return nil, fmt.Errorf("solvency: vault total %s: %w", cfg.Asset, err)
 		}
 		if ledger.Cmp(vault) > 0 {
 			out = append(out, Discrepancy{
-				Chain:       s.cfg.ChainID,
+				Chain:       string(s.cfg.ChainID),
 				Asset:       cfg.Asset,
 				LedgerTotal: ledger,
 				VaultTotal:  vault,

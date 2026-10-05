@@ -37,12 +37,6 @@ func (_c *DepositAddressCreate) SetAddress(v string) *DepositAddressCreate {
 	return _c
 }
 
-// SetMode sets the "mode" field.
-func (_c *DepositAddressCreate) SetMode(v depositaddress.Mode) *DepositAddressCreate {
-	_c.mutation.SetMode(v)
-	return _c
-}
-
 // SetActive sets the "active" field.
 func (_c *DepositAddressCreate) SetActive(v bool) *DepositAddressCreate {
 	_c.mutation.SetActive(v)
@@ -124,14 +118,6 @@ func (_c *DepositAddressCreate) check() error {
 			return &ValidationError{Name: "address", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.address": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Mode(); !ok {
-		return &ValidationError{Name: "mode", err: errors.New(`ent: missing required field "DepositAddress.mode"`)}
-	}
-	if v, ok := _c.mutation.Mode(); ok {
-		if err := depositaddress.ModeValidator(v); err != nil {
-			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "DepositAddress.mode": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Active(); !ok {
 		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "DepositAddress.active"`)}
 	}
@@ -172,10 +158,6 @@ func (_c *DepositAddressCreate) createSpec() (*DepositAddress, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Address(); ok {
 		_spec.SetField(depositaddress.FieldAddress, field.TypeString, value)
 		_node.Address = value
-	}
-	if value, ok := _c.mutation.Mode(); ok {
-		_spec.SetField(depositaddress.FieldMode, field.TypeEnum, value)
-		_node.Mode = value
 	}
 	if value, ok := _c.mutation.Active(); ok {
 		_spec.SetField(depositaddress.FieldActive, field.TypeBool, value)

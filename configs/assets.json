@@ -20,5 +20,53 @@
     "n_credit": 2,
     "n_finalize": 4,
     "reorg_window": 3
+  },
+  {
+    "chain": "stubchain",
+    "asset": "USDC",
+    "decimals": 6,
+    "mode": "custodian",
+    "min_amount": "100",
+    "n_credit": 2,
+    "n_finalize": 4,
+    "reorg_window": 3,
+    "exposure_cap": "10000",
+    "tier_amount": "5000"
+  },
+  {
+    "chain": "stubchain",
+    "asset": "WBTC",
+    "decimals": 8,
+    "mode": "self_built",
+    "min_amount": "10000",
+    "n_credit": 3,
+    "n_finalize": 6,
+    "reorg_window": 5,
+    "exposure_cap": "50000000",
+    "tier_amount": "20000000"
+  },
+  {
+    "chain": "fastchain",
+    "asset": "SOL",
+    "decimals": 9,
+    "mode": "self_built",
+    "min_amount": "1000",
+    "n_credit": 10,
+    "n_finalize": 32,
+    "reorg_window": 15,
+    "exposure_cap": "100000",
+    "tier_amount": "50000"
+  },
+  {
+    "chain": "fastchain",
+    "asset": "USDC",
+    "decimals": 6,
+    "mode": "custodian",
+    "min_amount": "100",
+    "n_credit": 10,
+    "n_finalize": 32,
+    "reorg_window": 15,
+    "exposure_cap": "20000",
+    "tier_amount": "10000"
   }
 ]

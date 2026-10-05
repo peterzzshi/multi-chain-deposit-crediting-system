@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/deposit"
 	"fmt"
 	"strings"
@@ -30,7 +31,7 @@ type Deposit struct {
 	// Amount holds the value of the "amount" field.
 	Amount string `json:"amount,omitempty"`
 	// Mode holds the value of the "mode" field.
-	Mode deposit.Mode `json:"mode,omitempty"`
+	Mode domain.Mode `json:"mode,omitempty"`
 	// State holds the value of the "state" field.
 	State deposit.State `json:"state,omitempty"`
 	// CreditCycle holds the value of the "credit_cycle" field.
@@ -128,7 +129,7 @@ func (_m *Deposit) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field mode", values[i])
 			} else if value.Valid {
-				_m.Mode = deposit.Mode(value.String)
+				_m.Mode = domain.Mode(value.String)
 			}
 		case deposit.FieldState:
 			if value, ok := values[i].(*sql.NullString); !ok {
