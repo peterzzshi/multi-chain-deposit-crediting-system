@@ -44,26 +44,23 @@ flowchart LR
 
 PostgreSQL is the durable pipeline. Recovery flows from sources of truth (chain rescan, custodian query API), never broker replay (ADR 0007).
 
-## Components
+## Processes
 
-| Component            | Responsibility                                                                           | Notes                                                   |
-|----------------------|------------------------------------------------------------------------------------------|---------------------------------------------------------|
-| **Scanner**          | Stream blocks, extract transfers, batch-resolve recipients, detect reorgs, advance depth | ~3K tx/block, ~100-500 MiB/process                      |
-| **Webhook ingest**   | Receive custodian events, dedup by source ID, persist to `source_events`                 | Vault balance events → reconciliation only (ADR 0004)   |
-| **Chain verifier**   | Confirm custodian claims on-chain, measure depth, re-check until finalized               | Platform measures depth; webhook is hint (ADR 0004)     |
-| **Crediting engine** | Run state machine, atomic credit (state + ledger + balance)                              | Sole ledger writer, per-`(account,asset)` serialization |
-| **Reconciliation**   | Poll custodian API for missed webhooks, compare vault vs ledger totals                   | Completeness backstop, never credit trigger             |
-| **Exposure monitor** | Track unfinalized spendable value vs `E_max`, alert/hold at cap                          | Crediting never blocked (risk-policy §4)                |
+| Process                     | Cardinality            | Responsibilities                                                                         |
+|-----------------------------|------------------------|------------------------------------------------------------------------------------------|
+| **server** (`cmd/server`)   | N replicas (stateless) | Custodian webhook endpoint, debit API, query endpoints                                   |
+| **scanner** (`cmd/scanner`) | 1 per chain            | Self-built deposit detection, inline reorg handling, confirmation depth advancement      |
+| **worker** (`cmd/worker`)   | 1+ replicas            | Rechecker (custodian reorgs), reconciler + solvency, exposure monitor, invariant checker |
 
-External debits (withdrawals, trades) call the crediting engine's transactional interface, never write ledger directly (ADR 0003).
+Chain client adapter (`internal/adapters`) abstracts node RPC for both scanner and custodian verification; custodian provider adapter abstracts webhook claims and API queries.
 
 ## Data Flows
 
-**Self-built**: Chain → scanner → `PENDING` → depth advances → `N_credit`: atomic (state + ledger + balance) → `N_finalize`: `FINALIZED`
+**Self-built**: Chain → scanner → `CREATED` → `EventObserved` → `PENDING` → depth advances → `N_credit`: atomic (state + ledger + balance) → `N_finalize`: `FINALIZED`
 
-**Custodian**: Event → webhook → verifier confirms on-chain → `PENDING` → depth/crediting as above → re-checker watches until `FINALIZED`
+**Custodian**: Event → webhook → verifier confirms on-chain → `CREATED` → `EventObserved` → `PENDING` → depth/crediting as above → re-checker watches until `FINALIZED`
 
-**Reorg**: Parent/hash mismatch → rewind → deposits `REORGED` → rescan: re-included → `PENDING`, invalid past window → `REVERSED` with compensating entry (ADR 0002)
+**Reorg**: Parent/hash mismatch → rewind → deposits `REORGED` → rescan: re-included → `EventReincluded` → `PENDING`, invalid past window → `REVERSED` with compensating entry (ADR 0002)
 
 **Missed webhook**: Reconciliation poll → custodian API → same verified pipeline
 

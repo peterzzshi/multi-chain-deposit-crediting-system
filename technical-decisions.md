@@ -1,6 +1,6 @@
 # Design Notes
 
-Working answers and trade-offs for the multi-chain deposit-crediting assignment. Ratified decisions live in `docs/adr/`; vocabulary in `CONTEXT.md`; risk models in `docs/risk-policy.md`. This file holds the reasoning that doesn't belong in any of those, plus the capacity estimation deliverable.
+Working notes for the multi-chain deposit-crediting assignment. Ratified decisions live in `docs/adr/`; vocabulary in `CONTEXT.md`. This file holds reasoning that doesn't belong in either.
 
 ## Language and Implementation Stack
 

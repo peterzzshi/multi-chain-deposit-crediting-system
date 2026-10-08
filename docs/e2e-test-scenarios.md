@@ -1,11 +1,8 @@
 # End-to-End Test Scenarios
 
-Comprehensive end-to-end checks you can run locally against stub APIs. Each
-scenario derives from a requirement in `requirements.md` — not from the
-implementation — and states the exact steps and the expected outcome.
-
-All commands below can be executed against this repository and will produce
-the documented results.
+Manual checks you can run locally against stub APIs. Each scenario derives
+from a requirement in `requirements.md` — not from the implementation — and
+states the exact steps and the expected outcome.
 
 ## Local topology
 
@@ -13,53 +10,72 @@ the documented results.
  curl (you)                curl (you = webhook channel)
     │                            │
     ▼                            ▼
- chainstub :9100 ──► scanner ──►│
- (stub chain node)   (self-built│   server :9200 ──► PostgreSQL :5432
-    ▲                ingest)    │   (webhooks, debits, reads)
-    │                            │        ▲
+ chain-node :9100 ──► scanner ──►│
+ chain-node-fast:9101 (self-built│   server :9200 ──► PostgreSQL :5432
+ (stub chain nodes)   ingest)    │   (webhooks, debits, reads)
+    ▲                            │        ▲
     └──────── worker ◄───────────┘        │
- (re-checker, risk,      custodianstub :9300
+ (re-checker, risk,      custodian-api :9300
   invariants,            (stub custodian:
   reconciliation) ◄────── query API + vaults)
 ```
 
-- **chainstub** is a stand-in chain node. Blocks are mined only when you
-  say so (`POST /admin/blocks`, `/admin/mine`), and reorgs happen only
-  when you trigger them (`POST /admin/reorg`) — every scenario is
-  deterministic.
-- **custodianstub** is a stand-in custodian. Its query API always tells
-  the truth; the webhook channel is *you*: `GET /admin/webhooks` drains
-  pending deliveries, and you POST them to the app's webhook endpoint.
-  Faults (duplicate/delayed/dropped) are injected at observation time.
+- **chain-node** is a stand-in chain node, one process per network
+  (`stubchain` on :9100, `fastchain` on :9101 — each instance only knows its
+  own chain). Blocks are mined only when you say so (`POST /admin/blocks`,
+  `/admin/mine`), and reorgs happen only when you trigger them
+  (`POST /admin/reorg`) — every scenario is deterministic.
+- **custodian-api** is a stand-in custodian. Its query API always tells the
+  truth; the webhook channel is *you*: `GET /admin/webhooks` drains pending
+  deliveries, and you POST them to the app's webhook endpoint. Faults
+  (duplicate/delayed/dropped) are injected at observation time.
 - The app (scanner, server, worker) treats both stubs exactly like real
-  integrations — over HTTP, behind the same interfaces a real adapter
-  would implement.
+  integrations — over HTTP, behind the same interfaces a real adapter would
+  implement.
 
 ## Setup
 
+The quickest path is the full Compose stack — it already runs two chain-node
+instances (one per network), the custodian stub, PostgreSQL, and the three
+app services:
+
 ```bash
-# 1. PostgreSQL (only service in docker-compose)
-docker compose up -d postgres
+docker compose up --build
+```
 
-# 2. Start the five processes (one terminal each, or append &)
-go run ./cmd/chainstub                                        # :9100 stub chain node (stubchain)
-CHAIN_ID=fastchain PORT=9101 go run ./cmd/chainstub          # :9101 stub chain node (fastchain)
-go run ./cmd/custodianstub                                    # :9300 stub custodian
-go run ./cmd/scanner                                          # self-built ingest
-go run ./cmd/server                                           # :9200 webhooks/debits/reads
-CUSTODIAN_API_URL=http://localhost:9300 go run ./cmd/worker   # background loops
+Then seed the sample addresses and jump to the scenarios below:
 
-# 3. Seed addresses (asset configs come from configs/assets.json — each
-#    app binary validates and applies it on boot; schema is created the
-#    same way)
+```bash
 docker compose exec -T postgres psql -U postgres -d deposit_crediting < scripts/seed.sql
+```
 
-# 4. Optional: clean slate between runs
+Optional clean slate between runs:
+
+```bash
 docker compose exec -T postgres psql -U postgres -d deposit_crediting -c \
   "TRUNCATE ledger_entries, account_balances, deposits, source_events, canonical_blocks, chain_cursors, exposure_states;"
 ```
 
-**Important:** For fast chain scenarios, you must run a second chainstub instance on port 9101 with `CHAIN_ID=fastchain`. The scanner and worker will automatically detect both chains from the asset configs.
+**To iterate on code without rebuilding images**, run Postgres and the stubs
+through Compose, then run the Go services directly against the stubs'
+published ports via `configs/chains.local.json`:
+
+```bash
+docker compose up -d postgres chain-node chain-node-fast custodian-api migrate
+
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable \
+CHAINS_CONFIG=configs/chains.local.json ASSETS_CONFIG=configs/assets.json \
+  START_HEIGHT=0 MAX_BATCH=100 go run ./cmd/scanner
+
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable \
+CHAINS_CONFIG=configs/chains.local.json ASSETS_CONFIG=configs/assets.json \
+  LISTEN_ADDR=:9200 PROVIDER=custodianA go run ./cmd/server
+
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/deposit_crediting?sslmode=disable \
+CHAINS_CONFIG=configs/chains.local.json ASSETS_CONFIG=configs/assets.json \
+CUSTODIAN_API_URL=http://localhost:9300 PROVIDER=custodianA \
+  RECONCILE_INTERVAL_MS=30000 RECONCILE_OVERLAP_MS=5000 go run ./cmd/worker
+```
 
 Supported assets live in `configs/assets.json` (validated and upserted by
 every binary at startup; edit the file and restart a binary to change
@@ -462,7 +478,7 @@ dave's WBTC balance reflects 50000 (0.0005 BTC in human terms).
 
 *Requirement: fast chains use different N_credit/N_finalize values.*
 
-Ensure the fastchain chainstub is running on port 9101.
+Ensure the fastchain chain-node (`chain-node-fast`) is running on port 9101.
 
 ```bash
 curl -s -X POST localhost:9101/admin/blocks -d '{"transfers":[
@@ -666,12 +682,9 @@ crash. If the new branch re-includes `0xs29`: `PENDING` → `CREDITED` again.
 
 ---
 
----
-
 ## Cleanup
 
 ```bash
-# stop the five processes (Ctrl-C in each terminal), then:
 docker compose down          # keep the data volume
 docker compose down -v       # or wipe everything
 ```

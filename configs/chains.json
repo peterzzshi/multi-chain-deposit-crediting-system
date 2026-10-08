@@ -6,7 +6,7 @@
   },
   {
     "network_id": "fastchain",
-    "chain_api_url": "http://chain-node:9100",
+    "chain_api_url": "http://chain-node-fast:9101",
     "poll_interval_ms": 1000
   }
 ]

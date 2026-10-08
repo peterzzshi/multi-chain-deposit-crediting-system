@@ -8,4 +8,4 @@ Rationale:
 2. An attacker's payoff aggregates across all simultaneous victims, so a per-deposit "value < attack cost" rule does not protect us — only the aggregate cap on our own unfinalized spendable value is fully under our control.
 3. Attack-cost parameters (staked value, token price, slashable fraction, bribe/rental markets) are unmeasurable in real time and non-stationary; they can bound exposure but cannot serve as a timely credit trigger.
 
-On a chain with a real BFT finality signal we would credit at finality instead of depth; the given conditions (frequent, deep reorgs on both chains) rule that out by assumption. The models behind this are annotated in [../risk-policy.md](../risk-policy.md).
+On a chain with a real BFT finality signal we would credit at finality instead of depth; the given conditions (frequent, deep reorgs on both chains) rule that out by assumption.

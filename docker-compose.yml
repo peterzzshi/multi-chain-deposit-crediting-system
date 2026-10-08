@@ -38,6 +38,17 @@ services:
     ports:
       - "9100:9100"
 
+  chain-node-fast:
+    build:
+      context: .
+      args:
+        SERVICE: chain-node
+    image: multi-chain-deposit-crediting-system-chain-node:latest
+    environment:
+      LISTEN_ADDR: :9101
+    ports:
+      - "9101:9101"
+
   custodian-api:
     build:
       context: .
@@ -68,6 +79,8 @@ services:
         condition: service_completed_successfully
       chain-node:
         condition: service_started
+      chain-node-fast:
+        condition: service_started
     ports:
       - "9200:9200"
 
@@ -90,6 +103,8 @@ services:
         condition: service_completed_successfully
       chain-node:
         condition: service_started
+      chain-node-fast:
+        condition: service_started
 
   worker:
     build:
@@ -111,6 +126,8 @@ services:
       migrate:
         condition: service_completed_successfully
       chain-node:
+        condition: service_started
+      chain-node-fast:
         condition: service_started
       custodian-api:
         condition: service_started

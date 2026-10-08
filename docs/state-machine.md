@@ -4,8 +4,10 @@ One shared machine for both crediting modes (ADR 0005). States track **logical t
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: transfer observed
-    [*] --> BELOW_MINIMUM: under minimum
+    [*] --> CREATED: OpenDeposit
+    
+    CREATED --> PENDING: EventObserved
+    CREATED --> BELOW_MINIMUM: EventObservedBelowMinimum
 
     PENDING --> CREDITED: depth N_credit
     CREDITED --> FINALIZED: depth N_finalize
@@ -26,7 +28,7 @@ stateDiagram-v2
 
 **BELOW_MINIMUM is terminal.** Users can send sub minimum on-chain; we observe but don't credit.
 
-**FINALIZED stops watching.** After `N_finalize` (far deeper than `N_credit`), the system stops checking canonical inclusion. Accepts residual risk: a reorg deeper than `N_finalize` could leave a credit in place. Trade-off is bounded monitoring cost vs unbounded protection; the exposure cap already bounds the financial risk (risk-policy.md §2).
+**FINALIZED stops watching.** After `N_finalize` (far deeper than `N_credit`), the system stops checking canonical inclusion. Accepts residual risk: a reorg deeper than `N_finalize` could leave a credit in place. Trade-off is bounded monitoring cost vs unbounded protection; an exposure cap on aggregate unfinalized value bounds the financial risk (ADR 0002, ADR 0006).
 
 ## Invariants
 

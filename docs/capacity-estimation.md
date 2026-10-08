@@ -80,11 +80,11 @@ At 0.1% match, `r` ≈ 1.75 matched transfers/s; at 1%, ≈ 17.5/s. With four du
 
 Replay is CPU/DB-bound, not arrival-bound, so catch-up runs faster than live ingest: re-filtering the full retained window (worst case 5,000 fast-chain blocks ≈ 15M tx) at ~10k tx/s takes ~25 minutes for an exceptional deep event; typical reorgs of 2–10 blocks replay in seconds. Cursor commits are ~35/min — trivial.
 
-These are order-of-magnitude planning numbers. Replace the match rate, payload size, peak multiplier, retention period, and replay depth with measured or explicitly agreed assumptions before the walkthrough. The reorg-risk models in [risk-policy.md](risk-policy.md) tune confirmation and exposure policy; they do not substitute for this throughput, memory, and storage estimate.
+These are order-of-magnitude planning numbers; match rate, payload size, peak multiplier, retention period, and replay depth would be replaced with measured values before production. Reorg-depth and exposure-cap policy (ADR 0002, 0006) tune confirmation and exposure handling; they don't substitute for this estimate.
 
-## Measured Benchmarks (validation)
+## Measured Benchmarks (reference, not reproducible)
 
-Environment: Apple M2, dockerized Postgres 16, single test client; integration benchmarks in `internal/store/bench_integration_test.go` and `internal/scanner/bench_integration_test.go` (`go test -tags=integration -bench`). Order-of-magnitude validation of the estimates above, not a production sizing.
+Apple M2, dockerized Postgres 16, single test client. The `-tags=integration` benchmarks that produced these numbers were removed during cleanup; figures below are retained for order-of-magnitude validation only.
 
 | Path                                                            |                            Estimate |                                                 Measured | Verdict                                                             |
 |-----------------------------------------------------------------|------------------------------------:|---------------------------------------------------------:|---------------------------------------------------------------------|
