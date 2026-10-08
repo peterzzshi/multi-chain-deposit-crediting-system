@@ -1,15 +1,18 @@
-package adapters
+package chaintest
 
 import (
 	"context"
 	"fmt"
 	"sync"
+
+	"deposit-crediting/internal/adapters"
 )
 
+// Chain is an in-memory fake blockchain for testing.
 type Chain struct {
 	mu           sync.Mutex
 	branch       int
-	blocks       []Block
+	blocks       []adapters.Block
 	BeforeBlock  func(height uint64)
 	BlockHashErr error
 }
@@ -24,7 +27,7 @@ func (c *Chain) CorruptParent(height uint64, parent string) {
 	c.blocks[height-1].ParentHash = parent
 }
 
-func (c *Chain) AddBlock(transfers ...Transfer) Block {
+func (c *Chain) AddBlock(transfers ...adapters.Transfer) adapters.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	height := uint64(len(c.blocks)) + 1
@@ -32,7 +35,7 @@ func (c *Chain) AddBlock(transfers ...Transfer) Block {
 	if len(c.blocks) > 0 {
 		parent = c.blocks[len(c.blocks)-1].Hash
 	}
-	b := Block{
+	b := adapters.Block{
 		Height:     height,
 		Hash:       c.hash(height),
 		ParentHash: parent,
@@ -74,31 +77,31 @@ func (c *Chain) BlockHash(_ context.Context, height uint64) (string, bool, error
 	return c.blocks[height-1].Hash, true, nil
 }
 
-func (c *Chain) Block(_ context.Context, height uint64) (Block, error) {
+func (c *Chain) Block(_ context.Context, height uint64) (adapters.Block, error) {
 	if c.BeforeBlock != nil {
 		c.BeforeBlock(height)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if height == 0 || height > uint64(len(c.blocks)) {
-		return Block{}, fmt.Errorf("chaintest: no canonical block at height %d", height)
+		return adapters.Block{}, fmt.Errorf("chaintest: no canonical block at height %d", height)
 	}
 	return c.blocks[height-1], nil
 }
 
-func (c *Chain) TxByHash(_ context.Context, txHash string) (TxLocation, bool, error) {
+func (c *Chain) TxByHash(_ context.Context, txHash string) (adapters.TxLocation, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, b := range c.blocks {
-		var transfers []Transfer
+		var transfers []adapters.Transfer
 		for _, tr := range b.Transfers {
 			if tr.TxHash == txHash {
 				transfers = append(transfers, tr)
 			}
 		}
 		if len(transfers) > 0 {
-			return TxLocation{Height: b.Height, Hash: b.Hash, Transfers: transfers}, true, nil
+			return adapters.TxLocation{Height: b.Height, Hash: b.Hash, Transfers: transfers}, true, nil
 		}
 	}
-	return TxLocation{}, false, nil
+	return adapters.TxLocation{}, false, nil
 }

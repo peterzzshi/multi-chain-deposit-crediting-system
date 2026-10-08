@@ -3,6 +3,7 @@
 package deposit
 
 import (
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/predicate"
 	"time"
 
@@ -82,6 +83,18 @@ func Address(v string) predicate.Deposit {
 // Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
 func Amount(v string) predicate.Deposit {
 	return predicate.Deposit(sql.FieldEQ(FieldAmount, v))
+}
+
+// Mode applies equality check predicate on the "mode" field. It's identical to ModeEQ.
+func Mode(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEQ(FieldMode, vc))
+}
+
+// State applies equality check predicate on the "state" field. It's identical to StateEQ.
+func State(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEQ(FieldState, vc))
 }
 
 // CreditCycle applies equality check predicate on the "credit_cycle" field. It's identical to CreditCycleEQ.
@@ -520,43 +533,171 @@ func AmountContainsFold(v string) predicate.Deposit {
 }
 
 // ModeEQ applies the EQ predicate on the "mode" field.
-func ModeEQ(v Mode) predicate.Deposit {
-	return predicate.Deposit(sql.FieldEQ(FieldMode, v))
+func ModeEQ(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEQ(FieldMode, vc))
 }
 
 // ModeNEQ applies the NEQ predicate on the "mode" field.
-func ModeNEQ(v Mode) predicate.Deposit {
-	return predicate.Deposit(sql.FieldNEQ(FieldMode, v))
+func ModeNEQ(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldNEQ(FieldMode, vc))
 }
 
 // ModeIn applies the In predicate on the "mode" field.
-func ModeIn(vs ...Mode) predicate.Deposit {
-	return predicate.Deposit(sql.FieldIn(FieldMode, vs...))
+func ModeIn(vs ...domain.Mode) predicate.Deposit {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Deposit(sql.FieldIn(FieldMode, v...))
 }
 
 // ModeNotIn applies the NotIn predicate on the "mode" field.
-func ModeNotIn(vs ...Mode) predicate.Deposit {
-	return predicate.Deposit(sql.FieldNotIn(FieldMode, vs...))
+func ModeNotIn(vs ...domain.Mode) predicate.Deposit {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Deposit(sql.FieldNotIn(FieldMode, v...))
+}
+
+// ModeGT applies the GT predicate on the "mode" field.
+func ModeGT(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldGT(FieldMode, vc))
+}
+
+// ModeGTE applies the GTE predicate on the "mode" field.
+func ModeGTE(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldGTE(FieldMode, vc))
+}
+
+// ModeLT applies the LT predicate on the "mode" field.
+func ModeLT(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldLT(FieldMode, vc))
+}
+
+// ModeLTE applies the LTE predicate on the "mode" field.
+func ModeLTE(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldLTE(FieldMode, vc))
+}
+
+// ModeContains applies the Contains predicate on the "mode" field.
+func ModeContains(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldContains(FieldMode, vc))
+}
+
+// ModeHasPrefix applies the HasPrefix predicate on the "mode" field.
+func ModeHasPrefix(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldHasPrefix(FieldMode, vc))
+}
+
+// ModeHasSuffix applies the HasSuffix predicate on the "mode" field.
+func ModeHasSuffix(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldHasSuffix(FieldMode, vc))
+}
+
+// ModeEqualFold applies the EqualFold predicate on the "mode" field.
+func ModeEqualFold(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEqualFold(FieldMode, vc))
+}
+
+// ModeContainsFold applies the ContainsFold predicate on the "mode" field.
+func ModeContainsFold(v domain.Mode) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldContainsFold(FieldMode, vc))
 }
 
 // StateEQ applies the EQ predicate on the "state" field.
-func StateEQ(v State) predicate.Deposit {
-	return predicate.Deposit(sql.FieldEQ(FieldState, v))
+func StateEQ(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEQ(FieldState, vc))
 }
 
 // StateNEQ applies the NEQ predicate on the "state" field.
-func StateNEQ(v State) predicate.Deposit {
-	return predicate.Deposit(sql.FieldNEQ(FieldState, v))
+func StateNEQ(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldNEQ(FieldState, vc))
 }
 
 // StateIn applies the In predicate on the "state" field.
-func StateIn(vs ...State) predicate.Deposit {
-	return predicate.Deposit(sql.FieldIn(FieldState, vs...))
+func StateIn(vs ...domain.State) predicate.Deposit {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Deposit(sql.FieldIn(FieldState, v...))
 }
 
 // StateNotIn applies the NotIn predicate on the "state" field.
-func StateNotIn(vs ...State) predicate.Deposit {
-	return predicate.Deposit(sql.FieldNotIn(FieldState, vs...))
+func StateNotIn(vs ...domain.State) predicate.Deposit {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Deposit(sql.FieldNotIn(FieldState, v...))
+}
+
+// StateGT applies the GT predicate on the "state" field.
+func StateGT(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldGT(FieldState, vc))
+}
+
+// StateGTE applies the GTE predicate on the "state" field.
+func StateGTE(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldGTE(FieldState, vc))
+}
+
+// StateLT applies the LT predicate on the "state" field.
+func StateLT(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldLT(FieldState, vc))
+}
+
+// StateLTE applies the LTE predicate on the "state" field.
+func StateLTE(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldLTE(FieldState, vc))
+}
+
+// StateContains applies the Contains predicate on the "state" field.
+func StateContains(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldContains(FieldState, vc))
+}
+
+// StateHasPrefix applies the HasPrefix predicate on the "state" field.
+func StateHasPrefix(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldHasPrefix(FieldState, vc))
+}
+
+// StateHasSuffix applies the HasSuffix predicate on the "state" field.
+func StateHasSuffix(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldHasSuffix(FieldState, vc))
+}
+
+// StateEqualFold applies the EqualFold predicate on the "state" field.
+func StateEqualFold(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldEqualFold(FieldState, vc))
+}
+
+// StateContainsFold applies the ContainsFold predicate on the "state" field.
+func StateContainsFold(v domain.State) predicate.Deposit {
+	vc := string(v)
+	return predicate.Deposit(sql.FieldContainsFold(FieldState, vc))
 }
 
 // CreditCycleEQ applies the EQ predicate on the "credit_cycle" field.

@@ -1,4 +1,4 @@
-package domain
+package credit
 
 import (
 	"errors"
@@ -109,6 +109,21 @@ func TestReverseDerivesUniqueReference(t *testing.T) {
 	}
 	if got, want := reversal.Type, Reversal; got != want {
 		t.Errorf("reversal.Type = %s; want %s", got, want)
+	}
+	if got, want := reversal.ReversesRef, credit.Ref; got != want {
+		t.Errorf("reversal.ReversesRef = %q; want %q", got, want)
+	}
+}
+
+func TestNonReversalEntriesHaveNoReversesRef(t *testing.T) {
+	for _, typ := range []TransactionType{Credit, Debit} {
+		entry, err := New(typ, "alice", "ETH", big.NewInt(100), "ref")
+		if err != nil {
+			t.Fatalf("New(%s) unexpected error: %v", typ, err)
+		}
+		if entry.ReversesRef != "" {
+			t.Errorf("New(%s).ReversesRef = %q; want empty", typ, entry.ReversesRef)
+		}
 	}
 }
 

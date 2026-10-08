@@ -27,6 +27,8 @@ type LedgerEntry struct {
 	Amount string `json:"amount,omitempty"`
 	// Ref holds the value of the "ref" field.
 	Ref string `json:"ref,omitempty"`
+	// ReversesRef holds the value of the "reverses_ref" field.
+	ReversesRef *string `json:"reverses_ref,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -39,7 +41,7 @@ func (*LedgerEntry) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case ledgerentry.FieldID:
 			values[i] = new(sql.NullInt64)
-		case ledgerentry.FieldAccount, ledgerentry.FieldAsset, ledgerentry.FieldType, ledgerentry.FieldAmount, ledgerentry.FieldRef:
+		case ledgerentry.FieldAccount, ledgerentry.FieldAsset, ledgerentry.FieldType, ledgerentry.FieldAmount, ledgerentry.FieldRef, ledgerentry.FieldReversesRef:
 			values[i] = new(sql.NullString)
 		case ledgerentry.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -93,6 +95,13 @@ func (_m *LedgerEntry) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field ref", values[i])
 			} else if value.Valid {
 				_m.Ref = value.String
+			}
+		case ledgerentry.FieldReversesRef:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field reverses_ref", values[i])
+			} else if value.Valid {
+				_m.ReversesRef = new(string)
+				*_m.ReversesRef = value.String
 			}
 		case ledgerentry.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -150,6 +159,11 @@ func (_m *LedgerEntry) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ref=")
 	builder.WriteString(_m.Ref)
+	builder.WriteString(", ")
+	if v := _m.ReversesRef; v != nil {
+		builder.WriteString("reverses_ref=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

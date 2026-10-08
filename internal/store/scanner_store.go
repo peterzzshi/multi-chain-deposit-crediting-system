@@ -3,25 +3,26 @@ package store
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/scanner"
 	"deposit-crediting/internal/store/ent"
-	"deposit-crediting/internal/store/ent/assetconfig"
 	"deposit-crediting/internal/store/ent/canonicalblock"
 	"deposit-crediting/internal/store/ent/chaincursor"
-	entdeposit "deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 )
 
 // ScannerStore implements scanner.Store over the ent client.
 type ScannerStore struct {
 	client *ent.Client
+	*DepositOps
 }
 
 func NewScannerStore(client *ent.Client) *ScannerStore {
-	return &ScannerStore{client: client}
+	return &ScannerStore{
+		client:     client,
+		DepositOps: NewDepositOps(client),
+	}
 }
 
 func (s *ScannerStore) Cursor(ctx context.Context, chainID string) (scanner.Cursor, bool, error) {
@@ -92,30 +93,6 @@ func (s *ScannerStore) DropBlocksAbove(ctx context.Context, chainID string, heig
 	return nil
 }
 
-func (s *ScannerStore) AssetConfigs(ctx context.Context, chainID string) ([]scanner.AssetConfig, error) {
-	rows, err := s.client.AssetConfig.Query().
-		Where(assetconfig.Chain(chainID), assetconfig.ModeEQ(assetconfig.ModeSelfBuilt)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("store: asset configs %s: %w", chainID, err)
-	}
-	configs := make([]scanner.AssetConfig, 0, len(rows))
-	for _, r := range rows {
-		min, ok := new(big.Int).SetString(r.MinAmount, 10)
-		if !ok {
-			return nil, fmt.Errorf("store: corrupt min amount %q for %s/%s", r.MinAmount, chainID, r.Asset)
-		}
-		configs = append(configs, scanner.AssetConfig{
-			Asset:       r.Asset,
-			MinAmount:   min,
-			NCredit:     uint64(r.NCredit),
-			NFinalize:   uint64(r.NFinalize),
-			ReorgWindow: uint64(r.ReorgWindow),
-		})
-	}
-	return configs, nil
-}
-
 func (s *ScannerStore) ResolveRecipients(ctx context.Context, chainID string, addrs []string) (map[string]string, error) {
 	if len(addrs) == 0 {
 		return nil, nil
@@ -137,8 +114,8 @@ func (s *ScannerStore) ResolveRecipients(ctx context.Context, chainID string, ad
 	return recipients, nil
 }
 
-func (s *ScannerStore) OpenDeposit(ctx context.Context, p scanner.OpenParams) (domain.OpenResult, error) {
-	err := s.client.Deposit.Create().
+func (s *ScannerStore) OpenDeposit(ctx context.Context, p domain.OpenDepositParams) (domain.State, error) {
+	create := s.client.Deposit.Create().
 		SetTransferID(p.TransferID).
 		SetChain(p.Chain).
 		SetAsset(p.Asset).
@@ -146,72 +123,45 @@ func (s *ScannerStore) OpenDeposit(ctx context.Context, p scanner.OpenParams) (d
 		SetAddress(p.Address).
 		SetAmount(p.Amount.String()).
 		SetMode(domain.ModeSelfBuilt).
-		SetState(entdeposit.State(p.State)).
+		SetState(domain.StateCreated).
 		SetBlockHeight(int64(p.Height)).
 		SetBlockHash(p.Hash).
-		SetTxHash(p.TxHash).
-		Exec(ctx)
-	if ent.IsConstraintError(err) {
-		existingState, stateErr := depositState(ctx, s.client, p.TransferID)
-		if stateErr != nil {
-			return domain.OpenResult{}, fmt.Errorf("store: query existing deposit %s: %w", p.TransferID, stateErr)
-		}
-		return domain.NewAlreadyExists(existingState), nil
-	}
-	if err != nil {
-		return domain.OpenResult{}, fmt.Errorf("store: open deposit %s: %w", p.TransferID, err)
-	}
-	return domain.NewCreated(), nil
+		SetTxHash(p.TxHash)
+
+	return execOpenDeposit(ctx, create, p.TransferID, s.client)
 }
 
-func (s *ScannerStore) ReincludeDeposit(ctx context.Context, transferID string, height uint64, hash string) error {
-	return reincludeDeposit(ctx, s.client, transferID, height, hash)
-}
-
-func (s *ScannerStore) DepositState(ctx context.Context, transferID string) (domain.State, error) {
-	return depositState(ctx, s.client, transferID)
-}
-
-func (s *ScannerStore) TrackedDeposits(ctx context.Context, chainID string) ([]scanner.Tracked, error) {
-	rows, err := s.client.Deposit.Query().
-		Where(
-			entdeposit.Chain(chainID),
-			entdeposit.ModeEQ(entdeposit.ModeSelfBuilt),
-			entdeposit.StateIn(entdeposit.StatePENDING, entdeposit.StateCREDITED),
-		).
-		All(ctx)
+func (s *ScannerStore) TrackedDeposits(ctx context.Context, chainID string) ([]domain.TrackedDeposit, error) {
+	rows, err := queryTrackedDeposits(s.client, chainID, domain.ModeSelfBuilt).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("store: tracked deposits %s: %w", chainID, err)
 	}
-	var tracked []scanner.Tracked
+	var tracked []domain.TrackedDeposit
 	for _, r := range rows {
 		if r.BlockHeight == nil {
 			continue
 		}
-		tracked = append(tracked, scanner.Tracked{
+		tracked = append(tracked, domain.TrackedDeposit{
 			TransferID: r.TransferID,
 			Asset:      r.Asset,
-			State:      domain.State(r.State),
+			State:      r.State,
 			Height:     uint64(*r.BlockHeight),
 		})
 	}
 	return tracked, nil
 }
 
-func (s *ScannerStore) ReorgedDeposits(ctx context.Context, chainID string) ([]scanner.Reorged, error) {
-	rows, err := s.client.Deposit.Query().
-		Where(
-			entdeposit.Chain(chainID),
-			entdeposit.ModeEQ(entdeposit.ModeSelfBuilt),
-			entdeposit.StateEQ(entdeposit.StateREORGED),
-		).
-		All(ctx)
+func (s *ScannerStore) ReorgedDeposits(ctx context.Context, chainID string) ([]domain.ReorgedDeposit, error) {
+	rows, err := queryReorgedDeposits(s.client, chainID, domain.ModeSelfBuilt, domain.StateReorged).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("store: reorged deposits %s: %w", chainID, err)
 	}
-	var reorged []scanner.Reorged
+	var reorged []domain.ReorgedDeposit
 	for _, r := range rows {
-		entry := scanner.Reorged{TransferID: r.TransferID, Asset: r.Asset}
+		entry := domain.ReorgedDeposit{TransferID: r.TransferID, Asset: r.Asset, State: r.State}
+		if r.TxHash != nil {
+			entry.TxHash = *r.TxHash
+		}
 		if r.ReorgedHeight != nil {
 			h := uint64(*r.ReorgedHeight)
 			entry.Height = &h
@@ -219,12 +169,4 @@ func (s *ScannerStore) ReorgedDeposits(ctx context.Context, chainID string) ([]s
 		reorged = append(reorged, entry)
 	}
 	return reorged, nil
-}
-
-func (s *ScannerStore) MarkReorged(ctx context.Context, transferID string, height uint64) error {
-	return markReorged(ctx, s.client, transferID, height)
-}
-
-func (s *ScannerStore) HasCredit(ctx context.Context, transferID string) (bool, error) {
-	return hasCredit(ctx, s.client, transferID)
 }

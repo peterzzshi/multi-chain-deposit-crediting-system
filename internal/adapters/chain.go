@@ -27,14 +27,14 @@ type Transfer struct {
 	TraceIndex int
 }
 
-func (t Transfer) LogicalID(networkID domain.NetworkID) (domain.LogicalTransferID, error) {
+func (t Transfer) LogicalID(networkID domain.NetworkID) (LogicalTransferID, error) {
 	switch t.Kind {
 	case Token:
-		return domain.NewTokenTransfer(networkID, t.TxHash, t.Asset, t.LogIndex)
+		return NewTokenTransfer(networkID, t.TxHash, t.Asset, t.LogIndex)
 	case Native:
-		return domain.NewNativeTransfer(networkID, t.TxHash)
+		return NewNativeTransfer(networkID, t.TxHash)
 	case Internal:
-		return domain.NewInternalNativeTransfer(networkID, t.TxHash, t.TraceIndex)
+		return NewInternalNativeTransfer(networkID, t.TxHash, t.TraceIndex)
 	}
 	return nil, fmt.Errorf("chain: unknown transfer kind %q", t.Kind)
 }

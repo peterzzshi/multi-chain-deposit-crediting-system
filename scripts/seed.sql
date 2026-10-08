@@ -13,4 +13,4 @@ VALUES
   ('dave',  'stubchain', '0xddd', true),
   -- fastchain addresses (scenario 21)
   ('eve',   'fastchain', '0xeee', true)
-ON CONFLICT (chain, address) DO NOTHING;
+ON CONFLICT (account, chain) DO NOTHING;

@@ -1,10 +1,11 @@
-package adapters
+package chaintest
 
 import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"deposit-crediting/internal/adapters"
 )
 
 func Handler(c *Chain) http.Handler {
@@ -55,22 +56,22 @@ func Handler(c *Chain) http.Handler {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "transaction not on canonical chain"})
 			return
 		}
-		var transfers []TransferJSON
+		var transfers []adapters.TransferJSON
 		for _, t := range loc.Transfers {
-			transfers = append(transfers, FromTransfer(t))
+			transfers = append(transfers, adapters.FromTransfer(t))
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"height": loc.Height, "hash": loc.Hash, "transfers": transfers})
 	})
 
 	mux.HandleFunc("POST /admin/blocks", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Transfers []TransferJSON `json:"transfers"`
+			Transfers []adapters.TransferJSON `json:"transfers"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		var transfers []Transfer
+		var transfers []adapters.Transfer
 		for _, tj := range req.Transfers {
 			t, err := tj.ToTransfer()
 			if err != nil {
@@ -90,7 +91,7 @@ func Handler(c *Chain) http.Handler {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "count must be a positive integer"})
 			return
 		}
-		var head Block
+		var head adapters.Block
 		for i := 0; i < req.Count; i++ {
 			head = c.AddBlock()
 		}
@@ -114,16 +115,16 @@ func Handler(c *Chain) http.Handler {
 }
 
 type blockJSON struct {
-	Height     uint64         `json:"height"`
-	Hash       string         `json:"hash"`
-	ParentHash string         `json:"parentHash"`
-	Transfers  []TransferJSON `json:"transfers"`
+	Height     uint64                  `json:"height"`
+	Hash       string                  `json:"hash"`
+	ParentHash string                  `json:"parentHash"`
+	Transfers  []adapters.TransferJSON `json:"transfers"`
 }
 
-func blockToJSON(b Block) blockJSON {
+func blockToJSON(b adapters.Block) blockJSON {
 	out := blockJSON{Height: b.Height, Hash: b.Hash, ParentHash: b.ParentHash}
 	for _, t := range b.Transfers {
-		out.Transfers = append(out.Transfers, FromTransfer(t))
+		out.Transfers = append(out.Transfers, adapters.FromTransfer(t))
 	}
 	return out
 }
@@ -137,20 +138,16 @@ func pathHeight(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	return height, true
 }
 
-func respond(w http.ResponseWriter, v any, err error) {
+func respond(w http.ResponseWriter, data any, err error) {
 	if err != nil {
-		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no canonical block") {
-			status = http.StatusNotFound
-		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, v)
+	writeJSON(w, http.StatusOK, data)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(data)
 }

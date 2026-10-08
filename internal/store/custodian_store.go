@@ -10,8 +10,6 @@ import (
 	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent"
 	"deposit-crediting/internal/store/ent/accountbalance"
-	"deposit-crediting/internal/store/ent/assetconfig"
-	entdeposit "deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/depositaddress"
 	"deposit-crediting/internal/store/ent/sourceevent"
 )
@@ -19,10 +17,14 @@ import (
 // CustodianStore implements custodian.Store over the ent client.
 type CustodianStore struct {
 	client *ent.Client
+	*DepositOps
 }
 
 func NewCustodianStore(client *ent.Client) *CustodianStore {
-	return &CustodianStore{client: client}
+	return &CustodianStore{
+		client:     client,
+		DepositOps: NewDepositOps(client),
+	}
 }
 
 func (s *CustodianStore) SourceEventSeen(ctx context.Context, provider, eventID string) (bool, error) {
@@ -70,58 +72,8 @@ func (s *CustodianStore) ResolveAddress(ctx context.Context, chainID, address st
 	return row.Account, true, nil
 }
 
-func (s *CustodianStore) AssetConfig(ctx context.Context, chainID, asset string) (custodian.AssetConfig, bool, error) {
-	row, err := s.client.AssetConfig.Query().
-		Where(
-			assetconfig.Chain(chainID),
-			assetconfig.Asset(asset),
-			assetconfig.ModeEQ(assetconfig.ModeCustodian),
-		).
-		Only(ctx)
-	if ent.IsNotFound(err) {
-		return custodian.AssetConfig{}, false, nil
-	}
-	if err != nil {
-		return custodian.AssetConfig{}, false, fmt.Errorf("store: asset config %s/%s: %w", chainID, asset, err)
-	}
-	cfg, err := custodianConfig(row)
-	return cfg, err == nil, err
-}
-
-func (s *CustodianStore) AssetConfigs(ctx context.Context, chainID string) ([]custodian.AssetConfig, error) {
-	rows, err := s.client.AssetConfig.Query().
-		Where(assetconfig.Chain(chainID), assetconfig.ModeEQ(assetconfig.ModeCustodian)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("store: asset configs %s: %w", chainID, err)
-	}
-	configs := make([]custodian.AssetConfig, 0, len(rows))
-	for _, r := range rows {
-		cfg, err := custodianConfig(r)
-		if err != nil {
-			return nil, err
-		}
-		configs = append(configs, cfg)
-	}
-	return configs, nil
-}
-
-func custodianConfig(r *ent.AssetConfig) (custodian.AssetConfig, error) {
-	min, ok := new(big.Int).SetString(r.MinAmount, 10)
-	if !ok {
-		return custodian.AssetConfig{}, fmt.Errorf("store: corrupt min amount %q for %s/%s", r.MinAmount, r.Chain, r.Asset)
-	}
-	return custodian.AssetConfig{
-		Asset:       r.Asset,
-		MinAmount:   min,
-		NCredit:     uint64(r.NCredit),
-		NFinalize:   uint64(r.NFinalize),
-		ReorgWindow: uint64(r.ReorgWindow),
-	}, nil
-}
-
-func (s *CustodianStore) OpenDeposit(ctx context.Context, p custodian.OpenParams) (domain.OpenResult, error) {
-	err := s.client.Deposit.Create().
+func (s *CustodianStore) OpenDeposit(ctx context.Context, p domain.OpenDepositParams) (domain.State, error) {
+	create := s.client.Deposit.Create().
 		SetTransferID(p.TransferID).
 		SetChain(p.Chain).
 		SetAsset(p.Asset).
@@ -129,49 +81,29 @@ func (s *CustodianStore) OpenDeposit(ctx context.Context, p custodian.OpenParams
 		SetAddress(p.Address).
 		SetAmount(p.Amount.String()).
 		SetMode(domain.ModeCustodian).
-		SetState(entdeposit.State(p.State)).
+		SetState(domain.StateCreated).
 		SetBlockHeight(int64(p.Height)).
 		SetBlockHash(p.Hash).
 		SetTxHash(p.TxHash).
-		SetSourceEvent(p.SourceEvent).
-		Exec(ctx)
-	if ent.IsConstraintError(err) {
-		existingState, stateErr := depositState(ctx, s.client, p.TransferID)
-		if stateErr != nil {
-			return domain.OpenResult{}, fmt.Errorf("store: query existing deposit %s: %w", p.TransferID, stateErr)
-		}
-		return domain.NewAlreadyExists(existingState), nil
-	}
-	if err != nil {
-		return domain.OpenResult{}, fmt.Errorf("store: open deposit %s: %w", p.TransferID, err)
-	}
-	return domain.NewCreated(), nil
+		SetSourceEvent(p.SourceEvent)
+
+	return execOpenDeposit(ctx, create, p.TransferID, s.client)
 }
 
-func (s *CustodianStore) DepositState(ctx context.Context, transferID string) (domain.State, error) {
-	return depositState(ctx, s.client, transferID)
-}
-
-func (s *CustodianStore) TrackedDeposits(ctx context.Context, chainID string) ([]custodian.Tracked, error) {
-	rows, err := s.client.Deposit.Query().
-		Where(
-			entdeposit.Chain(chainID),
-			entdeposit.ModeEQ(entdeposit.ModeCustodian),
-			entdeposit.StateIn(entdeposit.StatePENDING, entdeposit.StateCREDITED),
-		).
-		All(ctx)
+func (s *CustodianStore) TrackedDeposits(ctx context.Context, chainID string) ([]domain.TrackedDeposit, error) {
+	rows, err := queryTrackedDeposits(s.client, chainID, domain.ModeCustodian).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("store: tracked deposits %s: %w", chainID, err)
 	}
-	var tracked []custodian.Tracked
+	var tracked []domain.TrackedDeposit
 	for _, r := range rows {
 		if r.BlockHeight == nil || r.BlockHash == nil {
 			continue
 		}
-		tracked = append(tracked, custodian.Tracked{
+		tracked = append(tracked, domain.TrackedDeposit{
 			TransferID: r.TransferID,
 			Asset:      r.Asset,
-			State:      domain.State(r.State),
+			State:      r.State,
 			Height:     uint64(*r.BlockHeight),
 			BlockHash:  *r.BlockHash,
 		})
@@ -179,20 +111,14 @@ func (s *CustodianStore) TrackedDeposits(ctx context.Context, chainID string) ([
 	return tracked, nil
 }
 
-func (s *CustodianStore) ReorgedDeposits(ctx context.Context, chainID string) ([]custodian.Reorged, error) {
-	rows, err := s.client.Deposit.Query().
-		Where(
-			entdeposit.Chain(chainID),
-			entdeposit.ModeEQ(entdeposit.ModeCustodian),
-			entdeposit.StateIn(entdeposit.StateREORGED, entdeposit.StateREVERSED),
-		).
-		All(ctx)
+func (s *CustodianStore) ReorgedDeposits(ctx context.Context, chainID string) ([]domain.ReorgedDeposit, error) {
+	rows, err := queryReorgedDeposits(s.client, chainID, domain.ModeCustodian, domain.StateReorged, domain.StateReversed).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("store: reorged deposits %s: %w", chainID, err)
 	}
-	var reorged []custodian.Reorged
+	var reorged []domain.ReorgedDeposit
 	for _, r := range rows {
-		entry := custodian.Reorged{TransferID: r.TransferID, Asset: r.Asset, State: domain.State(r.State)}
+		entry := domain.ReorgedDeposit{TransferID: r.TransferID, Asset: r.Asset, State: r.State}
 		if r.TxHash != nil {
 			entry.TxHash = *r.TxHash
 		}
@@ -203,18 +129,6 @@ func (s *CustodianStore) ReorgedDeposits(ctx context.Context, chainID string) ([
 		reorged = append(reorged, entry)
 	}
 	return reorged, nil
-}
-
-func (s *CustodianStore) MarkReorged(ctx context.Context, transferID string, height uint64) error {
-	return markReorged(ctx, s.client, transferID, height)
-}
-
-func (s *CustodianStore) ReincludeDeposit(ctx context.Context, transferID string, height uint64, hash string) error {
-	return reincludeDeposit(ctx, s.client, transferID, height, hash)
-}
-
-func (s *CustodianStore) HasCredit(ctx context.Context, transferID string) (bool, error) {
-	return hasCredit(ctx, s.client, transferID)
 }
 
 func (s *CustodianStore) LedgerTotal(ctx context.Context, chainID, asset string) (*big.Int, error) {

@@ -12,18 +12,25 @@ import (
 	"deposit-crediting/internal/errs"
 	"deposit-crediting/internal/store/ent"
 	"deposit-crediting/internal/store/ent/accountbalance"
-	"deposit-crediting/internal/store/ent/assetconfig"
 	entdeposit "deposit-crediting/internal/store/ent/deposit"
 	"deposit-crediting/internal/store/ent/exposurestate"
 	"deposit-crediting/internal/store/ent/ledgerentry"
 )
 
 type Store struct {
-	client *ent.Client
+	client      *ent.Client
+	tierAmounts map[string]map[string]*big.Int // chain -> asset -> tier_amount
 }
 
 func New(client *ent.Client) *Store {
-	return &Store{client: client}
+	return &Store{
+		client:      client,
+		tierAmounts: make(map[string]map[string]*big.Int),
+	}
+}
+
+func (s *Store) SetTierAmounts(chainID string, tiers map[string]*big.Int) {
+	s.tierAmounts[chainID] = tiers
 }
 
 // InTx commits on success and rolls back on error.
@@ -43,17 +50,17 @@ func (s *Store) InTx(ctx context.Context, fn func(context.Context, credit.Tx) er
 			err = fmt.Errorf("store: commit: %w", commitErr)
 		}
 	}()
-	return fn(ctx, &Tx{tx: tx})
+	return fn(ctx, &Tx{tx: tx, tierAmounts: s.tierAmounts})
 }
 
 type Tx struct {
-	tx *ent.Tx
+	tx          *ent.Tx
+	tierAmounts map[string]map[string]*big.Int // chain -> asset -> tier_amount
 }
 
 func (t *Tx) DepositForUpdate(ctx context.Context, transferID string) (credit.View, error) {
 	row, err := t.tx.Deposit.Query().
 		Where(entdeposit.TransferID(transferID)).
-		ForUpdate().
 		Only(ctx)
 	if ent.IsNotFound(err) {
 		return credit.View{}, errs.ErrDepositNotFound
@@ -99,7 +106,7 @@ func (t *Tx) SetCreditCycle(ctx context.Context, transferID string, cycle int) e
 func (t *Tx) SetDepositState(ctx context.Context, transferID string, state domain.State) error {
 	n, err := t.tx.Deposit.Update().
 		Where(entdeposit.TransferID(transferID)).
-		SetState(entdeposit.State(state)).
+		SetState(state).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("store: set state of %s: %w", transferID, err)
@@ -110,14 +117,17 @@ func (t *Tx) SetDepositState(ctx context.Context, transferID string, state domai
 	return nil
 }
 
-func (t *Tx) InsertEntry(ctx context.Context, e domain.Entry) error {
-	_, err := t.tx.LedgerEntry.Create().
+func (t *Tx) InsertEntry(ctx context.Context, e credit.Entry) error {
+	create := t.tx.LedgerEntry.Create().
 		SetAccount(e.Account).
 		SetAsset(e.Asset).
 		SetType(ledgerentry.Type(e.Type)).
 		SetAmount(e.Amount.String()).
-		SetRef(e.Ref).
-		Save(ctx)
+		SetRef(e.Ref)
+	if e.ReversesRef != "" {
+		create.SetReversesRef(e.ReversesRef)
+	}
+	_, err := create.Save(ctx)
 	if ent.IsConstraintError(err) {
 		return fmt.Errorf("%w: %s", errs.ErrDuplicateRef, e.Ref)
 	}
@@ -134,6 +144,21 @@ func (t *Tx) HasEntry(ctx context.Context, ref string) (bool, error) {
 		Count(ctx)
 	if err != nil {
 		return false, fmt.Errorf("store: query entry %s: %w", ref, err)
+	}
+	return n > 0, nil
+}
+
+// ReversalOf matches on the stored link, not a derived ref string.
+func (t *Tx) ReversalOf(ctx context.Context, ref string) (bool, error) {
+	n, err := t.tx.LedgerEntry.Query().
+		Where(
+			ledgerentry.ReversesRef(ref),
+			ledgerentry.TypeEQ(ledgerentry.TypeReversal),
+		).
+		Limit(1).
+		Count(ctx)
+	if err != nil {
+		return false, fmt.Errorf("store: query reversal of %s: %w", ref, err)
 	}
 	return n > 0, nil
 }
@@ -164,21 +189,19 @@ func (t *Tx) BalanceForUpdate(ctx context.Context, account, asset string) (credi
 	if !ok {
 		return credit.Balance{}, fmt.Errorf("store: corrupt held %q for %s/%s", row.Held, account, asset)
 	}
-	return credit.Balance{Amount: balance, Held: held, Flagged: row.Flagged}, nil
+	return credit.Balance{Amount: balance, Held: held, Version: row.Version}, nil
 }
 
 func (t *Tx) lockBalance(ctx context.Context, account, asset string) (*ent.AccountBalance, error) {
 	return t.tx.AccountBalance.Query().
 		Where(accountbalance.Account(account), accountbalance.Asset(asset)).
-		ForUpdate().
 		Only(ctx)
 }
 
-func (t *Tx) SetBalance(ctx context.Context, account, asset string, balance *big.Int, flagged bool) error {
+func (t *Tx) SetBalance(ctx context.Context, account, asset string, balance *big.Int) error {
 	n, err := t.tx.AccountBalance.Update().
 		Where(accountbalance.Account(account), accountbalance.Asset(asset)).
 		SetBalance(balance.String()).
-		SetFlagged(flagged).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("store: set balance %s/%s: %w", account, asset, err)
@@ -189,35 +212,44 @@ func (t *Tx) SetBalance(ctx context.Context, account, asset string, balance *big
 	return nil
 }
 
+// SetBalanceOptimistic performs optimistic update with version check.
+// Returns true if successful, false if version conflict (caller should retry).
+func (t *Tx) SetBalanceOptimistic(ctx context.Context, account, asset string, balance *big.Int, expectedVersion int) (bool, error) {
+	n, err := t.tx.AccountBalance.Update().
+		Where(
+			accountbalance.Account(account),
+			accountbalance.Asset(asset),
+			accountbalance.Version(expectedVersion),
+		).
+		SetBalance(balance.String()).
+		SetVersion(expectedVersion + 1).
+		Save(ctx)
+	if err != nil {
+		return false, fmt.Errorf("store: optimistic set balance %s/%s: %w", account, asset, err)
+	}
+	return n == 1, nil
+}
+
 func (t *Tx) HoldsActive(ctx context.Context, chainID, asset string) (bool, *big.Int, error) {
 	row, err := t.tx.ExposureState.Query().
 		Where(exposurestate.Chain(chainID), exposurestate.Asset(asset)).
 		Only(ctx)
-	if ent.IsNotFound(err) || !row.HoldsActive {
+	if ent.IsNotFound(err) {
 		return false, nil, nil
 	}
 	if err != nil {
 		return false, nil, fmt.Errorf("store: exposure state %s/%s: %w", chainID, asset, err)
 	}
-	// Holds are active: the tier comes from the asset config; a missing
-	// config means no tier (hold everything — the conservative reading).
-	cfg, err := t.tx.AssetConfig.Query().
-		Where(assetconfig.Chain(chainID), assetconfig.Asset(asset)).
-		Only(ctx)
-	if ent.IsNotFound(err) {
-		return true, nil, nil
+	if !row.HoldsActive {
+		return false, nil, nil
 	}
-	if err != nil {
-		return false, nil, fmt.Errorf("store: asset config %s/%s: %w", chainID, asset, err)
+	// Holds are active: the tier comes from in-memory config; missing means no tier (hold everything).
+	if chainTiers, ok := t.tierAmounts[chainID]; ok {
+		if tier, ok := chainTiers[asset]; ok {
+			return true, tier, nil
+		}
 	}
-	if cfg.TierAmount == nil {
-		return true, nil, nil
-	}
-	tier, ok := new(big.Int).SetString(*cfg.TierAmount, 10)
-	if !ok {
-		return false, nil, fmt.Errorf("store: corrupt tier amount %q for %s/%s", *cfg.TierAmount, chainID, asset)
-	}
-	return true, tier, nil
+	return true, nil, nil
 }
 
 func (t *Tx) SetHeld(ctx context.Context, transferID, account, asset string, amount *big.Int) error {

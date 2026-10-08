@@ -6,18 +6,27 @@ import (
 	"log/slog"
 
 	"deposit-crediting/internal/adapters"
+	"deposit-crediting/internal/credit"
 	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 )
 
 type Ingestor struct {
-	cfg   Config
-	chain adapters.Client
-	store Store
+	cfg          Config
+	chain        adapters.Client
+	store        Store
+	engine       *credit.Engine
+	assetConfigs map[string]domain.AssetPolicy // asset -> config, pre-filtered for this chain + custodian mode
 }
 
-func NewIngestor(cfg Config, c adapters.Client, st Store) *Ingestor {
-	return &Ingestor{cfg: cfg, chain: c, store: st}
+func NewIngestor(cfg Config, c adapters.Client, st Store, e *credit.Engine, assetConfigs map[string]domain.AssetPolicy) *Ingestor {
+	return &Ingestor{
+		cfg:          cfg,
+		chain:        c,
+		store:        st,
+		engine:       e,
+		assetConfigs: assetConfigs,
+	}
 }
 
 func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
@@ -38,12 +47,9 @@ func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
 	if !ok {
 		return nil
 	}
-	cfg, ok, err := i.store.AssetConfig(ctx, string(i.cfg.ChainID), cl.Asset)
-	if err != nil {
-		return fmt.Errorf("custodian: asset config %s: %w", cl.Asset, err)
-	}
+	cfg, ok := i.assetConfigs[cl.Asset]
 	if !ok {
-		return nil
+		return nil // unsupported or self-built-mode asset
 	}
 	loc, found, err := i.chain.TxByHash(ctx, cl.TxHash)
 	if err != nil {
@@ -54,6 +60,11 @@ func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
 	}
 	tr, ok := matchTransfer(loc.Transfers, cl)
 	if !ok {
+		// Record the rejection as a source event so the dedup check at the top
+		// skips this claim on later polls instead of re-warning every time.
+		if err := i.store.RecordSourceEvent(ctx, i.cfg.Provider, cl); err != nil {
+			return fmt.Errorf("custodian: record rejected claim: %w", err)
+		}
 		slog.Warn("custodian claim contradicts chain, rejected",
 			"chain", cl.Chain, "tx", cl.TxHash, "to", cl.To, "asset", cl.Asset, "amount", cl.Amount)
 		return nil
@@ -66,13 +77,8 @@ func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
 	if tr.Amount.Cmp(cfg.MinAmount) < 0 {
 		event = domain.EventObservedBelowMinimum
 	}
-	state, _, err := domain.Transition(domain.StateNone, event)
-	if err != nil {
-		return fmt.Errorf("custodian: initial state: %w", err)
-	}
-	result, err := i.store.OpenDeposit(ctx, OpenParams{
+	state, err := i.store.OpenDeposit(ctx, domain.OpenDepositParams{
 		TransferID:  id.String(),
-		State:       state,
 		Chain:       string(i.cfg.ChainID),
 		Asset:       tr.Asset,
 		Account:     account,
@@ -86,13 +92,13 @@ func (i *Ingestor) Handle(ctx context.Context, cl Claim) error {
 	if err != nil {
 		return fmt.Errorf("custodian: open deposit %s: %w", id, err)
 	}
-	if !result.Created() {
+	if state != domain.StateCreated {
 		return nil
 	}
 	if err := i.store.RecordSourceEvent(ctx, i.cfg.Provider, cl); err != nil {
 		return fmt.Errorf("custodian: record source event: %w", err)
 	}
-	return nil
+	return i.engine.Apply(ctx, id.String(), event)
 }
 
 func matchTransfer(transfers []adapters.Transfer, cl Claim) (adapters.Transfer, bool) {

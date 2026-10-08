@@ -83,20 +83,6 @@ func (_u *AccountBalanceUpdate) SetNillableHeld(v *string) *AccountBalanceUpdate
 	return _u
 }
 
-// SetFlagged sets the "flagged" field.
-func (_u *AccountBalanceUpdate) SetFlagged(v bool) *AccountBalanceUpdate {
-	_u.mutation.SetFlagged(v)
-	return _u
-}
-
-// SetNillableFlagged sets the "flagged" field if the given value is not nil.
-func (_u *AccountBalanceUpdate) SetNillableFlagged(v *bool) *AccountBalanceUpdate {
-	if v != nil {
-		_u.SetFlagged(*v)
-	}
-	return _u
-}
-
 // SetVersion sets the "version" field.
 func (_u *AccountBalanceUpdate) SetVersion(v int) *AccountBalanceUpdate {
 	_u.mutation.ResetVersion()
@@ -189,9 +175,6 @@ func (_u *AccountBalanceUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.Held(); ok {
 		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Flagged(); ok {
-		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)
-	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(accountbalance.FieldVersion, field.TypeInt, value)
 	}
@@ -270,20 +253,6 @@ func (_u *AccountBalanceUpdateOne) SetHeld(v string) *AccountBalanceUpdateOne {
 func (_u *AccountBalanceUpdateOne) SetNillableHeld(v *string) *AccountBalanceUpdateOne {
 	if v != nil {
 		_u.SetHeld(*v)
-	}
-	return _u
-}
-
-// SetFlagged sets the "flagged" field.
-func (_u *AccountBalanceUpdateOne) SetFlagged(v bool) *AccountBalanceUpdateOne {
-	_u.mutation.SetFlagged(v)
-	return _u
-}
-
-// SetNillableFlagged sets the "flagged" field if the given value is not nil.
-func (_u *AccountBalanceUpdateOne) SetNillableFlagged(v *bool) *AccountBalanceUpdateOne {
-	if v != nil {
-		_u.SetFlagged(*v)
 	}
 	return _u
 }
@@ -409,9 +378,6 @@ func (_u *AccountBalanceUpdateOne) sqlSave(ctx context.Context) (_node *AccountB
 	}
 	if value, ok := _u.mutation.Held(); ok {
 		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Flagged(); ok {
-		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(accountbalance.FieldVersion, field.TypeInt, value)

@@ -1,9 +1,10 @@
-package domain
+package adapters
 
 import (
 	"fmt"
 	"strings"
 
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 )
 
@@ -23,18 +24,18 @@ func (id SourceEventID) String() string { return id.Provider + ":" + id.EventID 
 
 type LogicalTransferID interface {
 	fmt.Stringer
-	NetworkID() NetworkID
+	NetworkID() domain.NetworkID
 	sealed()
 }
 
 type TokenTransfer struct {
-	Chain    NetworkID
+	Chain    domain.NetworkID
 	TxHash   string
 	Contract string
 	LogIndex int
 }
 
-func NewTokenTransfer(c NetworkID, txHash, contract string, logIndex int) (TokenTransfer, error) {
+func NewTokenTransfer(c domain.NetworkID, txHash, contract string, logIndex int) (TokenTransfer, error) {
 	if !validParts(string(c), txHash, contract) {
 		return TokenTransfer{}, fmt.Errorf("%w: chain, txHash, contract", errs.ErrInvalidPart)
 	}
@@ -48,16 +49,16 @@ func (t TokenTransfer) String() string {
 	return fmt.Sprintf("%s:%s:token:%s:%d", t.Chain, t.TxHash, t.Contract, t.LogIndex)
 }
 
-func (t TokenTransfer) NetworkID() NetworkID { return t.Chain }
+func (t TokenTransfer) NetworkID() domain.NetworkID { return t.Chain }
 
 func (TokenTransfer) sealed() {}
 
 type NativeTransfer struct {
-	Chain  NetworkID
+	Chain  domain.NetworkID
 	TxHash string
 }
 
-func NewNativeTransfer(c NetworkID, txHash string) (NativeTransfer, error) {
+func NewNativeTransfer(c domain.NetworkID, txHash string) (NativeTransfer, error) {
 	if !validParts(string(c), txHash) {
 		return NativeTransfer{}, fmt.Errorf("%w: chain, txHash", errs.ErrInvalidPart)
 	}
@@ -66,17 +67,17 @@ func NewNativeTransfer(c NetworkID, txHash string) (NativeTransfer, error) {
 
 func (t NativeTransfer) String() string { return string(t.Chain) + ":" + t.TxHash + ":native" }
 
-func (t NativeTransfer) NetworkID() NetworkID { return t.Chain }
+func (t NativeTransfer) NetworkID() domain.NetworkID { return t.Chain }
 
 func (NativeTransfer) sealed() {}
 
 type InternalNativeTransfer struct {
-	Chain      NetworkID
+	Chain      domain.NetworkID
 	TxHash     string
 	TraceIndex int
 }
 
-func NewInternalNativeTransfer(c NetworkID, txHash string, traceIndex int) (InternalNativeTransfer, error) {
+func NewInternalNativeTransfer(c domain.NetworkID, txHash string, traceIndex int) (InternalNativeTransfer, error) {
 	if !validParts(string(c), txHash) {
 		return InternalNativeTransfer{}, fmt.Errorf("%w: chain, txHash", errs.ErrInvalidPart)
 	}
@@ -90,7 +91,7 @@ func (t InternalNativeTransfer) String() string {
 	return fmt.Sprintf("%s:%s:trace:%d", t.Chain, t.TxHash, t.TraceIndex)
 }
 
-func (t InternalNativeTransfer) NetworkID() NetworkID { return t.Chain }
+func (t InternalNativeTransfer) NetworkID() domain.NetworkID { return t.Chain }
 
 func (InternalNativeTransfer) sealed() {}
 

@@ -14,21 +14,25 @@ import (
 
 // Rechecker verifies custodian deposits and resolves reorgs.
 type Rechecker struct {
-	cfg    Config
-	chain  adapters.Client
-	store  Store
-	engine *credit.Engine
+	cfg          Config
+	chain        adapters.Client
+	store        Store
+	engine       *credit.Engine
+	assetConfigs map[string]domain.AssetPolicy // asset -> config, pre-filtered for this chain + custodian mode
 }
 
-func NewRechecker(cfg Config, c adapters.Client, st Store, e *credit.Engine) *Rechecker {
-	return &Rechecker{cfg: cfg, chain: c, store: st, engine: e}
+func NewRechecker(cfg Config, c adapters.Client, st Store, e *credit.Engine, assetConfigs map[string]domain.AssetPolicy) *Rechecker {
+	return &Rechecker{
+		cfg:          cfg,
+		chain:        c,
+		store:        st,
+		engine:       e,
+		assetConfigs: assetConfigs,
+	}
 }
 
 // Run polls until ctx is done.
 func (r *Rechecker) Run(ctx context.Context) error {
-	if r.cfg.PollInterval <= 0 {
-		return fmt.Errorf("rechecker: poll interval must be positive")
-	}
 	ticker := time.NewTicker(r.cfg.PollInterval)
 	defer ticker.Stop()
 	for {
@@ -49,26 +53,23 @@ func (r *Rechecker) Tick(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("rechecker: head: %w", err)
 	}
-	configs, err := r.configs(ctx)
-	if err != nil {
+	if err := r.verifyTracked(ctx, head); err != nil {
 		return err
 	}
-	if err := r.verifyTracked(ctx, head, configs); err != nil {
-		return err
-	}
-	return r.resolveReorged(ctx, head, configs)
+	return r.resolveReorged(ctx, head)
 }
 
-func (r *Rechecker) verifyTracked(ctx context.Context, head uint64, configs map[string]AssetConfig) error {
+func (r *Rechecker) verifyTracked(ctx context.Context, head uint64) error {
 	tracked, err := r.store.TrackedDeposits(ctx, string(r.cfg.ChainID))
 	if err != nil {
 		return fmt.Errorf("rechecker: tracked deposits: %w", err)
 	}
+	processor := credit.NewDepositDepthProcessor(r.engine, r.assetConfigs)
 	for _, d := range tracked {
-		cfg, ok := configs[d.Asset]
-		if !ok || d.Height > head {
+		if _, ok := r.assetConfigs[d.Asset]; !ok || d.Height > head {
 			continue
 		}
+		// Custodian-specific: verify block hash (reorg detection)
 		canonical, found, err := r.chain.BlockHash(ctx, d.Height)
 		if err != nil {
 			// RPC failure is not reorg evidence.
@@ -76,31 +77,29 @@ func (r *Rechecker) verifyTracked(ctx context.Context, head uint64, configs map[
 		}
 		if !found || canonical != d.BlockHash {
 			if err := r.engine.ApplyReorg(ctx, d.TransferID, head); err != nil {
-				return fmt.Errorf("rechecker: reorg out %s: %w", d.TransferID, err)
+				// One poisoned deposit must not starve the rest of the chain.
+				slog.ErrorContext(ctx, "rechecker: reorg out failed",
+					"chain", r.cfg.ChainID, "transfer", d.TransferID, "err", err)
 			}
 			continue
 		}
-		depth := head - d.Height + 1
-		switch {
-		case d.State == domain.StatePending && depth >= cfg.NCredit:
-			if err := r.engine.Apply(ctx, d.TransferID, domain.EventDepthReached); err != nil {
-				return fmt.Errorf("rechecker: credit %s: %w", d.TransferID, err)
-			}
-		case d.State == domain.StateCredited && depth >= cfg.NFinalize:
-			if err := r.engine.Apply(ctx, d.TransferID, domain.EventFinalityReached); err != nil {
-				return fmt.Errorf("rechecker: finalize %s: %w", d.TransferID, err)
-			}
+		// Shared depth-based progression logic
+		if _, err := processor.ProcessTrackedDepth(ctx, d, head); err != nil {
+			slog.ErrorContext(ctx, "rechecker: depth processing failed",
+				"chain", r.cfg.ChainID, "transfer", d.TransferID, "err", err)
 		}
 	}
 	return nil
 }
 
-func (r *Rechecker) resolveReorged(ctx context.Context, head uint64, configs map[string]AssetConfig) error {
+func (r *Rechecker) resolveReorged(ctx context.Context, head uint64) error {
 	reorged, err := r.store.ReorgedDeposits(ctx, string(r.cfg.ChainID))
 	if err != nil {
 		return fmt.Errorf("rechecker: reorged deposits: %w", err)
 	}
+	processor := credit.NewDepositDepthProcessor(r.engine, r.assetConfigs)
 	for _, d := range reorged {
+		// Custodian-specific: try to locate tx on chain and reinclude
 		if d.TxHash != "" {
 			loc, found, err := r.chain.TxByHash(ctx, d.TxHash)
 			if err != nil {
@@ -126,33 +125,16 @@ func (r *Rechecker) resolveReorged(ctx context.Context, head uint64, configs map
 			}
 			continue
 		}
-		cfg, ok := configs[d.Asset]
-		if !ok || head-*d.Height < cfg.ReorgWindow {
-			continue
-		}
-		credited, err := r.store.HasCredit(ctx, d.TransferID)
+		// Shared window expiry logic
+		result, err := processor.ProcessReorgedExpiry(ctx, d.TransferID, d.Asset, d.Height, head, r.store.HasCredit)
 		if err != nil {
-			return fmt.Errorf("rechecker: credit check %s: %w", d.TransferID, err)
+			return fmt.Errorf("rechecker: %w", err)
 		}
-		event := domain.EventWindowExpiredUncredited
-		if credited {
-			event = domain.EventWindowExpiredCredited
-		}
-		if err := r.engine.Apply(ctx, d.TransferID, event); err != nil {
-			return fmt.Errorf("rechecker: expire %s: %w", d.TransferID, err)
+		if result.ShouldApply {
+			if err := r.engine.Apply(ctx, d.TransferID, result.Event); err != nil {
+				return fmt.Errorf("rechecker: expire %s: %w", d.TransferID, err)
+			}
 		}
 	}
 	return nil
-}
-
-func (r *Rechecker) configs(ctx context.Context) (map[string]AssetConfig, error) {
-	list, err := r.store.AssetConfigs(ctx, string(r.cfg.ChainID))
-	if err != nil {
-		return nil, fmt.Errorf("rechecker: asset configs: %w", err)
-	}
-	configs := make(map[string]AssetConfig, len(list))
-	for _, c := range list {
-		configs[c.Asset] = c
-	}
-	return configs, nil
 }

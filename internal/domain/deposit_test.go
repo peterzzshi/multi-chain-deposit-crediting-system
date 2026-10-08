@@ -16,8 +16,8 @@ func TestTransitionTable(t *testing.T) {
 		wantState  State
 		wantEffect Effect
 	}{
-		{"observed opens pending", StateNone, EventObserved, StatePending, EffectNone},
-		{"below minimum recorded terminally", StateNone, EventObservedBelowMinimum, StateBelowMinimum, EffectNone},
+		{"observed opens pending", StateCreated, EventObserved, StatePending, EffectNone},
+		{"below minimum recorded terminally", StateCreated, EventObservedBelowMinimum, StateBelowMinimum, EffectNone},
 		{"depth reached credits", StatePending, EventDepthReached, StateCredited, EffectCredit},
 		{"finality horizon finalizes", StateCredited, EventFinalityReached, StateFinalized, EffectNone},
 		{"pending reorged out", StatePending, EventReorgedOut, StateReorged, EffectNone},
@@ -87,7 +87,7 @@ func TestTransitionRejectsIllegalPairs(t *testing.T) {
 		{"pending cannot finalize", StatePending, EventFinalityReached},
 		{"credited cannot be re-observed", StateCredited, EventObserved},
 		{"reorged cannot credit directly", StateReorged, EventDepthReached},
-		{"entry cannot skip observation", StateNone, EventDepthReached},
+		{"entry cannot skip observation", StateCreated, EventDepthReached},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestTransitionRejectsIllegalPairs(t *testing.T) {
 
 func TestFullLifecycle(t *testing.T) {
 	t.Run("observe credit finalize", func(t *testing.T) {
-		s := StateNone
+		s := StateCreated
 		for _, e := range []Event{EventObserved, EventDepthReached, EventFinalityReached} {
 			next, _, err := Transition(s, e)
 			if err != nil {
@@ -115,7 +115,7 @@ func TestFullLifecycle(t *testing.T) {
 	})
 
 	t.Run("credit then deep reorg reverses", func(t *testing.T) {
-		s := StateNone
+		s := StateCreated
 		var reversed Effect
 		for _, e := range []Event{EventObserved, EventDepthReached, EventReorgedOut, EventWindowExpiredCredited} {
 			next, eff, err := Transition(s, e)

@@ -5,6 +5,8 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+
+	"deposit-crediting/internal/domain"
 )
 
 // Deposit is one logical creditable transfer and its lifecycle state
@@ -25,10 +27,8 @@ func (Deposit) Fields() []ent.Field {
 		field.String("address").NotEmpty(),
 		field.String("amount").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}),
-		field.Enum("mode").Values("self_built", "custodian"),
-		field.Enum("state").
-			Values("PENDING", "CREDITED", "FINALIZED", "REORGED", "DROPPED", "REVERSED", "BELOW_MINIMUM").
-			Default("PENDING"),
+		field.String("mode").GoType(domain.Mode("")).NotEmpty(),
+		field.String("state").GoType(domain.State("")).NotEmpty(),
 		field.Int("credit_cycle").Default(0),
 		field.Int64("block_height").Optional().Nillable(),
 		field.String("block_hash").Optional().Nillable(),

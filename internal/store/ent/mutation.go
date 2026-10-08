@@ -6,7 +6,6 @@ import (
 	"context"
 	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/store/ent/accountbalance"
-	"deposit-crediting/internal/store/ent/assetconfig"
 	"deposit-crediting/internal/store/ent/canonicalblock"
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
@@ -35,7 +34,6 @@ const (
 
 	// Node types.
 	TypeAccountBalance = "AccountBalance"
-	TypeAssetConfig    = "AssetConfig"
 	TypeCanonicalBlock = "CanonicalBlock"
 	TypeChainCursor    = "ChainCursor"
 	TypeDeposit        = "Deposit"
@@ -55,7 +53,6 @@ type AccountBalanceMutation struct {
 	asset         *string
 	balance       *string
 	held          *string
-	flagged       *bool
 	version       *int
 	addversion    *int
 	clearedFields map[string]struct{}
@@ -306,42 +303,6 @@ func (m *AccountBalanceMutation) ResetHeld() {
 	m.held = nil
 }
 
-// SetFlagged sets the "flagged" field.
-func (m *AccountBalanceMutation) SetFlagged(b bool) {
-	m.flagged = &b
-}
-
-// Flagged returns the value of the "flagged" field in the mutation.
-func (m *AccountBalanceMutation) Flagged() (r bool, exists bool) {
-	v := m.flagged
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldFlagged returns the old "flagged" field's value of the AccountBalance entity.
-// If the AccountBalance object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AccountBalanceMutation) OldFlagged(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldFlagged is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldFlagged requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldFlagged: %w", err)
-	}
-	return oldValue.Flagged, nil
-}
-
-// ResetFlagged resets all changes to the "flagged" field.
-func (m *AccountBalanceMutation) ResetFlagged() {
-	m.flagged = nil
-}
-
 // SetVersion sets the "version" field.
 func (m *AccountBalanceMutation) SetVersion(i int) {
 	m.version = &i
@@ -432,7 +393,7 @@ func (m *AccountBalanceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountBalanceMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 5)
 	if m.account != nil {
 		fields = append(fields, accountbalance.FieldAccount)
 	}
@@ -444,9 +405,6 @@ func (m *AccountBalanceMutation) Fields() []string {
 	}
 	if m.held != nil {
 		fields = append(fields, accountbalance.FieldHeld)
-	}
-	if m.flagged != nil {
-		fields = append(fields, accountbalance.FieldFlagged)
 	}
 	if m.version != nil {
 		fields = append(fields, accountbalance.FieldVersion)
@@ -467,8 +425,6 @@ func (m *AccountBalanceMutation) Field(name string) (ent.Value, bool) {
 		return m.Balance()
 	case accountbalance.FieldHeld:
 		return m.Held()
-	case accountbalance.FieldFlagged:
-		return m.Flagged()
 	case accountbalance.FieldVersion:
 		return m.Version()
 	}
@@ -488,8 +444,6 @@ func (m *AccountBalanceMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldBalance(ctx)
 	case accountbalance.FieldHeld:
 		return m.OldHeld(ctx)
-	case accountbalance.FieldFlagged:
-		return m.OldFlagged(ctx)
 	case accountbalance.FieldVersion:
 		return m.OldVersion(ctx)
 	}
@@ -528,13 +482,6 @@ func (m *AccountBalanceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetHeld(v)
-		return nil
-	case accountbalance.FieldFlagged:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetFlagged(v)
 		return nil
 	case accountbalance.FieldVersion:
 		v, ok := value.(int)
@@ -619,9 +566,6 @@ func (m *AccountBalanceMutation) ResetField(name string) error {
 	case accountbalance.FieldHeld:
 		m.ResetHeld()
 		return nil
-	case accountbalance.FieldFlagged:
-		m.ResetFlagged()
-		return nil
 	case accountbalance.FieldVersion:
 		m.ResetVersion()
 		return nil
@@ -675,994 +619,6 @@ func (m *AccountBalanceMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *AccountBalanceMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown AccountBalance edge %s", name)
-}
-
-// AssetConfigMutation represents an operation that mutates the AssetConfig nodes in the graph.
-type AssetConfigMutation struct {
-	config
-	op              Op
-	typ             string
-	id              *int
-	chain           *string
-	asset           *string
-	decimals        *int
-	adddecimals     *int
-	mode            *assetconfig.Mode
-	min_amount      *string
-	n_credit        *int
-	addn_credit     *int
-	n_finalize      *int
-	addn_finalize   *int
-	reorg_window    *int
-	addreorg_window *int
-	exposure_cap    *string
-	tier_amount     *string
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*AssetConfig, error)
-	predicates      []predicate.AssetConfig
-}
-
-var _ ent.Mutation = (*AssetConfigMutation)(nil)
-
-// assetconfigOption allows management of the mutation configuration using functional options.
-type assetconfigOption func(*AssetConfigMutation)
-
-// newAssetConfigMutation creates new mutation for the AssetConfig entity.
-func newAssetConfigMutation(c config, op Op, opts ...assetconfigOption) *AssetConfigMutation {
-	m := &AssetConfigMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeAssetConfig,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withAssetConfigID sets the ID field of the mutation.
-func withAssetConfigID(id int) assetconfigOption {
-	return func(m *AssetConfigMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *AssetConfig
-		)
-		m.oldValue = func(ctx context.Context) (*AssetConfig, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().AssetConfig.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withAssetConfig sets the old AssetConfig of the mutation.
-func withAssetConfig(node *AssetConfig) assetconfigOption {
-	return func(m *AssetConfigMutation) {
-		m.oldValue = func(context.Context) (*AssetConfig, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m AssetConfigMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m AssetConfigMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *AssetConfigMutation) ID() (id int, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *AssetConfigMutation) IDs(ctx context.Context) ([]int, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []int{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().AssetConfig.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetChain sets the "chain" field.
-func (m *AssetConfigMutation) SetChain(s string) {
-	m.chain = &s
-}
-
-// Chain returns the value of the "chain" field in the mutation.
-func (m *AssetConfigMutation) Chain() (r string, exists bool) {
-	v := m.chain
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldChain returns the old "chain" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldChain(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldChain is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldChain requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldChain: %w", err)
-	}
-	return oldValue.Chain, nil
-}
-
-// ResetChain resets all changes to the "chain" field.
-func (m *AssetConfigMutation) ResetChain() {
-	m.chain = nil
-}
-
-// SetAsset sets the "asset" field.
-func (m *AssetConfigMutation) SetAsset(s string) {
-	m.asset = &s
-}
-
-// Asset returns the value of the "asset" field in the mutation.
-func (m *AssetConfigMutation) Asset() (r string, exists bool) {
-	v := m.asset
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAsset returns the old "asset" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldAsset(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAsset is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAsset requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAsset: %w", err)
-	}
-	return oldValue.Asset, nil
-}
-
-// ResetAsset resets all changes to the "asset" field.
-func (m *AssetConfigMutation) ResetAsset() {
-	m.asset = nil
-}
-
-// SetDecimals sets the "decimals" field.
-func (m *AssetConfigMutation) SetDecimals(i int) {
-	m.decimals = &i
-	m.adddecimals = nil
-}
-
-// Decimals returns the value of the "decimals" field in the mutation.
-func (m *AssetConfigMutation) Decimals() (r int, exists bool) {
-	v := m.decimals
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDecimals returns the old "decimals" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldDecimals(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDecimals is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDecimals requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDecimals: %w", err)
-	}
-	return oldValue.Decimals, nil
-}
-
-// AddDecimals adds i to the "decimals" field.
-func (m *AssetConfigMutation) AddDecimals(i int) {
-	if m.adddecimals != nil {
-		*m.adddecimals += i
-	} else {
-		m.adddecimals = &i
-	}
-}
-
-// AddedDecimals returns the value that was added to the "decimals" field in this mutation.
-func (m *AssetConfigMutation) AddedDecimals() (r int, exists bool) {
-	v := m.adddecimals
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetDecimals resets all changes to the "decimals" field.
-func (m *AssetConfigMutation) ResetDecimals() {
-	m.decimals = nil
-	m.adddecimals = nil
-}
-
-// SetMode sets the "mode" field.
-func (m *AssetConfigMutation) SetMode(a assetconfig.Mode) {
-	m.mode = &a
-}
-
-// Mode returns the value of the "mode" field in the mutation.
-func (m *AssetConfigMutation) Mode() (r assetconfig.Mode, exists bool) {
-	v := m.mode
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMode returns the old "mode" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldMode(ctx context.Context) (v assetconfig.Mode, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMode is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMode requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMode: %w", err)
-	}
-	return oldValue.Mode, nil
-}
-
-// ResetMode resets all changes to the "mode" field.
-func (m *AssetConfigMutation) ResetMode() {
-	m.mode = nil
-}
-
-// SetMinAmount sets the "min_amount" field.
-func (m *AssetConfigMutation) SetMinAmount(s string) {
-	m.min_amount = &s
-}
-
-// MinAmount returns the value of the "min_amount" field in the mutation.
-func (m *AssetConfigMutation) MinAmount() (r string, exists bool) {
-	v := m.min_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMinAmount returns the old "min_amount" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldMinAmount(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMinAmount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMinAmount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMinAmount: %w", err)
-	}
-	return oldValue.MinAmount, nil
-}
-
-// ResetMinAmount resets all changes to the "min_amount" field.
-func (m *AssetConfigMutation) ResetMinAmount() {
-	m.min_amount = nil
-}
-
-// SetNCredit sets the "n_credit" field.
-func (m *AssetConfigMutation) SetNCredit(i int) {
-	m.n_credit = &i
-	m.addn_credit = nil
-}
-
-// NCredit returns the value of the "n_credit" field in the mutation.
-func (m *AssetConfigMutation) NCredit() (r int, exists bool) {
-	v := m.n_credit
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldNCredit returns the old "n_credit" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldNCredit(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNCredit is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNCredit requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNCredit: %w", err)
-	}
-	return oldValue.NCredit, nil
-}
-
-// AddNCredit adds i to the "n_credit" field.
-func (m *AssetConfigMutation) AddNCredit(i int) {
-	if m.addn_credit != nil {
-		*m.addn_credit += i
-	} else {
-		m.addn_credit = &i
-	}
-}
-
-// AddedNCredit returns the value that was added to the "n_credit" field in this mutation.
-func (m *AssetConfigMutation) AddedNCredit() (r int, exists bool) {
-	v := m.addn_credit
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetNCredit resets all changes to the "n_credit" field.
-func (m *AssetConfigMutation) ResetNCredit() {
-	m.n_credit = nil
-	m.addn_credit = nil
-}
-
-// SetNFinalize sets the "n_finalize" field.
-func (m *AssetConfigMutation) SetNFinalize(i int) {
-	m.n_finalize = &i
-	m.addn_finalize = nil
-}
-
-// NFinalize returns the value of the "n_finalize" field in the mutation.
-func (m *AssetConfigMutation) NFinalize() (r int, exists bool) {
-	v := m.n_finalize
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldNFinalize returns the old "n_finalize" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldNFinalize(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNFinalize is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNFinalize requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNFinalize: %w", err)
-	}
-	return oldValue.NFinalize, nil
-}
-
-// AddNFinalize adds i to the "n_finalize" field.
-func (m *AssetConfigMutation) AddNFinalize(i int) {
-	if m.addn_finalize != nil {
-		*m.addn_finalize += i
-	} else {
-		m.addn_finalize = &i
-	}
-}
-
-// AddedNFinalize returns the value that was added to the "n_finalize" field in this mutation.
-func (m *AssetConfigMutation) AddedNFinalize() (r int, exists bool) {
-	v := m.addn_finalize
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetNFinalize resets all changes to the "n_finalize" field.
-func (m *AssetConfigMutation) ResetNFinalize() {
-	m.n_finalize = nil
-	m.addn_finalize = nil
-}
-
-// SetReorgWindow sets the "reorg_window" field.
-func (m *AssetConfigMutation) SetReorgWindow(i int) {
-	m.reorg_window = &i
-	m.addreorg_window = nil
-}
-
-// ReorgWindow returns the value of the "reorg_window" field in the mutation.
-func (m *AssetConfigMutation) ReorgWindow() (r int, exists bool) {
-	v := m.reorg_window
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldReorgWindow returns the old "reorg_window" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldReorgWindow(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldReorgWindow is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldReorgWindow requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldReorgWindow: %w", err)
-	}
-	return oldValue.ReorgWindow, nil
-}
-
-// AddReorgWindow adds i to the "reorg_window" field.
-func (m *AssetConfigMutation) AddReorgWindow(i int) {
-	if m.addreorg_window != nil {
-		*m.addreorg_window += i
-	} else {
-		m.addreorg_window = &i
-	}
-}
-
-// AddedReorgWindow returns the value that was added to the "reorg_window" field in this mutation.
-func (m *AssetConfigMutation) AddedReorgWindow() (r int, exists bool) {
-	v := m.addreorg_window
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetReorgWindow resets all changes to the "reorg_window" field.
-func (m *AssetConfigMutation) ResetReorgWindow() {
-	m.reorg_window = nil
-	m.addreorg_window = nil
-}
-
-// SetExposureCap sets the "exposure_cap" field.
-func (m *AssetConfigMutation) SetExposureCap(s string) {
-	m.exposure_cap = &s
-}
-
-// ExposureCap returns the value of the "exposure_cap" field in the mutation.
-func (m *AssetConfigMutation) ExposureCap() (r string, exists bool) {
-	v := m.exposure_cap
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldExposureCap returns the old "exposure_cap" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldExposureCap(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExposureCap is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExposureCap requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExposureCap: %w", err)
-	}
-	return oldValue.ExposureCap, nil
-}
-
-// ClearExposureCap clears the value of the "exposure_cap" field.
-func (m *AssetConfigMutation) ClearExposureCap() {
-	m.exposure_cap = nil
-	m.clearedFields[assetconfig.FieldExposureCap] = struct{}{}
-}
-
-// ExposureCapCleared returns if the "exposure_cap" field was cleared in this mutation.
-func (m *AssetConfigMutation) ExposureCapCleared() bool {
-	_, ok := m.clearedFields[assetconfig.FieldExposureCap]
-	return ok
-}
-
-// ResetExposureCap resets all changes to the "exposure_cap" field.
-func (m *AssetConfigMutation) ResetExposureCap() {
-	m.exposure_cap = nil
-	delete(m.clearedFields, assetconfig.FieldExposureCap)
-}
-
-// SetTierAmount sets the "tier_amount" field.
-func (m *AssetConfigMutation) SetTierAmount(s string) {
-	m.tier_amount = &s
-}
-
-// TierAmount returns the value of the "tier_amount" field in the mutation.
-func (m *AssetConfigMutation) TierAmount() (r string, exists bool) {
-	v := m.tier_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTierAmount returns the old "tier_amount" field's value of the AssetConfig entity.
-// If the AssetConfig object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AssetConfigMutation) OldTierAmount(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTierAmount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTierAmount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTierAmount: %w", err)
-	}
-	return oldValue.TierAmount, nil
-}
-
-// ClearTierAmount clears the value of the "tier_amount" field.
-func (m *AssetConfigMutation) ClearTierAmount() {
-	m.tier_amount = nil
-	m.clearedFields[assetconfig.FieldTierAmount] = struct{}{}
-}
-
-// TierAmountCleared returns if the "tier_amount" field was cleared in this mutation.
-func (m *AssetConfigMutation) TierAmountCleared() bool {
-	_, ok := m.clearedFields[assetconfig.FieldTierAmount]
-	return ok
-}
-
-// ResetTierAmount resets all changes to the "tier_amount" field.
-func (m *AssetConfigMutation) ResetTierAmount() {
-	m.tier_amount = nil
-	delete(m.clearedFields, assetconfig.FieldTierAmount)
-}
-
-// Where appends a list predicates to the AssetConfigMutation builder.
-func (m *AssetConfigMutation) Where(ps ...predicate.AssetConfig) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the AssetConfigMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *AssetConfigMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.AssetConfig, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *AssetConfigMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *AssetConfigMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (AssetConfig).
-func (m *AssetConfigMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *AssetConfigMutation) Fields() []string {
-	fields := make([]string, 0, 10)
-	if m.chain != nil {
-		fields = append(fields, assetconfig.FieldChain)
-	}
-	if m.asset != nil {
-		fields = append(fields, assetconfig.FieldAsset)
-	}
-	if m.decimals != nil {
-		fields = append(fields, assetconfig.FieldDecimals)
-	}
-	if m.mode != nil {
-		fields = append(fields, assetconfig.FieldMode)
-	}
-	if m.min_amount != nil {
-		fields = append(fields, assetconfig.FieldMinAmount)
-	}
-	if m.n_credit != nil {
-		fields = append(fields, assetconfig.FieldNCredit)
-	}
-	if m.n_finalize != nil {
-		fields = append(fields, assetconfig.FieldNFinalize)
-	}
-	if m.reorg_window != nil {
-		fields = append(fields, assetconfig.FieldReorgWindow)
-	}
-	if m.exposure_cap != nil {
-		fields = append(fields, assetconfig.FieldExposureCap)
-	}
-	if m.tier_amount != nil {
-		fields = append(fields, assetconfig.FieldTierAmount)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *AssetConfigMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case assetconfig.FieldChain:
-		return m.Chain()
-	case assetconfig.FieldAsset:
-		return m.Asset()
-	case assetconfig.FieldDecimals:
-		return m.Decimals()
-	case assetconfig.FieldMode:
-		return m.Mode()
-	case assetconfig.FieldMinAmount:
-		return m.MinAmount()
-	case assetconfig.FieldNCredit:
-		return m.NCredit()
-	case assetconfig.FieldNFinalize:
-		return m.NFinalize()
-	case assetconfig.FieldReorgWindow:
-		return m.ReorgWindow()
-	case assetconfig.FieldExposureCap:
-		return m.ExposureCap()
-	case assetconfig.FieldTierAmount:
-		return m.TierAmount()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *AssetConfigMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case assetconfig.FieldChain:
-		return m.OldChain(ctx)
-	case assetconfig.FieldAsset:
-		return m.OldAsset(ctx)
-	case assetconfig.FieldDecimals:
-		return m.OldDecimals(ctx)
-	case assetconfig.FieldMode:
-		return m.OldMode(ctx)
-	case assetconfig.FieldMinAmount:
-		return m.OldMinAmount(ctx)
-	case assetconfig.FieldNCredit:
-		return m.OldNCredit(ctx)
-	case assetconfig.FieldNFinalize:
-		return m.OldNFinalize(ctx)
-	case assetconfig.FieldReorgWindow:
-		return m.OldReorgWindow(ctx)
-	case assetconfig.FieldExposureCap:
-		return m.OldExposureCap(ctx)
-	case assetconfig.FieldTierAmount:
-		return m.OldTierAmount(ctx)
-	}
-	return nil, fmt.Errorf("unknown AssetConfig field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *AssetConfigMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case assetconfig.FieldChain:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetChain(v)
-		return nil
-	case assetconfig.FieldAsset:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAsset(v)
-		return nil
-	case assetconfig.FieldDecimals:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDecimals(v)
-		return nil
-	case assetconfig.FieldMode:
-		v, ok := value.(assetconfig.Mode)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMode(v)
-		return nil
-	case assetconfig.FieldMinAmount:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMinAmount(v)
-		return nil
-	case assetconfig.FieldNCredit:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetNCredit(v)
-		return nil
-	case assetconfig.FieldNFinalize:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetNFinalize(v)
-		return nil
-	case assetconfig.FieldReorgWindow:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetReorgWindow(v)
-		return nil
-	case assetconfig.FieldExposureCap:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetExposureCap(v)
-		return nil
-	case assetconfig.FieldTierAmount:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTierAmount(v)
-		return nil
-	}
-	return fmt.Errorf("unknown AssetConfig field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *AssetConfigMutation) AddedFields() []string {
-	var fields []string
-	if m.adddecimals != nil {
-		fields = append(fields, assetconfig.FieldDecimals)
-	}
-	if m.addn_credit != nil {
-		fields = append(fields, assetconfig.FieldNCredit)
-	}
-	if m.addn_finalize != nil {
-		fields = append(fields, assetconfig.FieldNFinalize)
-	}
-	if m.addreorg_window != nil {
-		fields = append(fields, assetconfig.FieldReorgWindow)
-	}
-	return fields
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *AssetConfigMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case assetconfig.FieldDecimals:
-		return m.AddedDecimals()
-	case assetconfig.FieldNCredit:
-		return m.AddedNCredit()
-	case assetconfig.FieldNFinalize:
-		return m.AddedNFinalize()
-	case assetconfig.FieldReorgWindow:
-		return m.AddedReorgWindow()
-	}
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *AssetConfigMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	case assetconfig.FieldDecimals:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddDecimals(v)
-		return nil
-	case assetconfig.FieldNCredit:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddNCredit(v)
-		return nil
-	case assetconfig.FieldNFinalize:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddNFinalize(v)
-		return nil
-	case assetconfig.FieldReorgWindow:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddReorgWindow(v)
-		return nil
-	}
-	return fmt.Errorf("unknown AssetConfig numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *AssetConfigMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(assetconfig.FieldExposureCap) {
-		fields = append(fields, assetconfig.FieldExposureCap)
-	}
-	if m.FieldCleared(assetconfig.FieldTierAmount) {
-		fields = append(fields, assetconfig.FieldTierAmount)
-	}
-	return fields
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *AssetConfigMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *AssetConfigMutation) ClearField(name string) error {
-	switch name {
-	case assetconfig.FieldExposureCap:
-		m.ClearExposureCap()
-		return nil
-	case assetconfig.FieldTierAmount:
-		m.ClearTierAmount()
-		return nil
-	}
-	return fmt.Errorf("unknown AssetConfig nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *AssetConfigMutation) ResetField(name string) error {
-	switch name {
-	case assetconfig.FieldChain:
-		m.ResetChain()
-		return nil
-	case assetconfig.FieldAsset:
-		m.ResetAsset()
-		return nil
-	case assetconfig.FieldDecimals:
-		m.ResetDecimals()
-		return nil
-	case assetconfig.FieldMode:
-		m.ResetMode()
-		return nil
-	case assetconfig.FieldMinAmount:
-		m.ResetMinAmount()
-		return nil
-	case assetconfig.FieldNCredit:
-		m.ResetNCredit()
-		return nil
-	case assetconfig.FieldNFinalize:
-		m.ResetNFinalize()
-		return nil
-	case assetconfig.FieldReorgWindow:
-		m.ResetReorgWindow()
-		return nil
-	case assetconfig.FieldExposureCap:
-		m.ResetExposureCap()
-		return nil
-	case assetconfig.FieldTierAmount:
-		m.ResetTierAmount()
-		return nil
-	}
-	return fmt.Errorf("unknown AssetConfig field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *AssetConfigMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *AssetConfigMutation) AddedIDs(name string) []ent.Value {
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *AssetConfigMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *AssetConfigMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *AssetConfigMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *AssetConfigMutation) EdgeCleared(name string) bool {
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *AssetConfigMutation) ClearEdge(name string) error {
-	return fmt.Errorf("unknown AssetConfig unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *AssetConfigMutation) ResetEdge(name string) error {
-	return fmt.Errorf("unknown AssetConfig edge %s", name)
 }
 
 // CanonicalBlockMutation represents an operation that mutates the CanonicalBlock nodes in the graph.
@@ -2618,7 +1574,7 @@ type DepositMutation struct {
 	address           *string
 	amount            *string
 	mode              *domain.Mode
-	state             *deposit.State
+	state             *domain.State
 	credit_cycle      *int
 	addcredit_cycle   *int
 	block_height      *int64
@@ -2988,12 +1944,12 @@ func (m *DepositMutation) ResetMode() {
 }
 
 // SetState sets the "state" field.
-func (m *DepositMutation) SetState(d deposit.State) {
+func (m *DepositMutation) SetState(d domain.State) {
 	m.state = &d
 }
 
 // State returns the value of the "state" field in the mutation.
-func (m *DepositMutation) State() (r deposit.State, exists bool) {
+func (m *DepositMutation) State() (r domain.State, exists bool) {
 	v := m.state
 	if v == nil {
 		return
@@ -3004,7 +1960,7 @@ func (m *DepositMutation) State() (r deposit.State, exists bool) {
 // OldState returns the old "state" field's value of the Deposit entity.
 // If the Deposit object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DepositMutation) OldState(ctx context.Context) (v deposit.State, err error) {
+func (m *DepositMutation) OldState(ctx context.Context) (v domain.State, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldState is only allowed on UpdateOne operations")
 	}
@@ -3704,7 +2660,7 @@ func (m *DepositMutation) SetField(name string, value ent.Value) error {
 		m.SetMode(v)
 		return nil
 	case deposit.FieldState:
-		v, ok := value.(deposit.State)
+		v, ok := value.(domain.State)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -5038,6 +3994,7 @@ type LedgerEntryMutation struct {
 	_type         *ledgerentry.Type
 	amount        *string
 	ref           *string
+	reverses_ref  *string
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -5323,6 +4280,55 @@ func (m *LedgerEntryMutation) ResetRef() {
 	m.ref = nil
 }
 
+// SetReversesRef sets the "reverses_ref" field.
+func (m *LedgerEntryMutation) SetReversesRef(s string) {
+	m.reverses_ref = &s
+}
+
+// ReversesRef returns the value of the "reverses_ref" field in the mutation.
+func (m *LedgerEntryMutation) ReversesRef() (r string, exists bool) {
+	v := m.reverses_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReversesRef returns the old "reverses_ref" field's value of the LedgerEntry entity.
+// If the LedgerEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LedgerEntryMutation) OldReversesRef(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReversesRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReversesRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReversesRef: %w", err)
+	}
+	return oldValue.ReversesRef, nil
+}
+
+// ClearReversesRef clears the value of the "reverses_ref" field.
+func (m *LedgerEntryMutation) ClearReversesRef() {
+	m.reverses_ref = nil
+	m.clearedFields[ledgerentry.FieldReversesRef] = struct{}{}
+}
+
+// ReversesRefCleared returns if the "reverses_ref" field was cleared in this mutation.
+func (m *LedgerEntryMutation) ReversesRefCleared() bool {
+	_, ok := m.clearedFields[ledgerentry.FieldReversesRef]
+	return ok
+}
+
+// ResetReversesRef resets all changes to the "reverses_ref" field.
+func (m *LedgerEntryMutation) ResetReversesRef() {
+	m.reverses_ref = nil
+	delete(m.clearedFields, ledgerentry.FieldReversesRef)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *LedgerEntryMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5393,7 +4399,7 @@ func (m *LedgerEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LedgerEntryMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.account != nil {
 		fields = append(fields, ledgerentry.FieldAccount)
 	}
@@ -5408,6 +4414,9 @@ func (m *LedgerEntryMutation) Fields() []string {
 	}
 	if m.ref != nil {
 		fields = append(fields, ledgerentry.FieldRef)
+	}
+	if m.reverses_ref != nil {
+		fields = append(fields, ledgerentry.FieldReversesRef)
 	}
 	if m.created_at != nil {
 		fields = append(fields, ledgerentry.FieldCreatedAt)
@@ -5430,6 +4439,8 @@ func (m *LedgerEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.Amount()
 	case ledgerentry.FieldRef:
 		return m.Ref()
+	case ledgerentry.FieldReversesRef:
+		return m.ReversesRef()
 	case ledgerentry.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -5451,6 +4462,8 @@ func (m *LedgerEntryMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldAmount(ctx)
 	case ledgerentry.FieldRef:
 		return m.OldRef(ctx)
+	case ledgerentry.FieldReversesRef:
+		return m.OldReversesRef(ctx)
 	case ledgerentry.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -5497,6 +4510,13 @@ func (m *LedgerEntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRef(v)
 		return nil
+	case ledgerentry.FieldReversesRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReversesRef(v)
+		return nil
 	case ledgerentry.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -5533,7 +4553,11 @@ func (m *LedgerEntryMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *LedgerEntryMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(ledgerentry.FieldReversesRef) {
+		fields = append(fields, ledgerentry.FieldReversesRef)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -5546,6 +4570,11 @@ func (m *LedgerEntryMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *LedgerEntryMutation) ClearField(name string) error {
+	switch name {
+	case ledgerentry.FieldReversesRef:
+		m.ClearReversesRef()
+		return nil
+	}
 	return fmt.Errorf("unknown LedgerEntry nullable field %s", name)
 }
 
@@ -5567,6 +4596,9 @@ func (m *LedgerEntryMutation) ResetField(name string) error {
 		return nil
 	case ledgerentry.FieldRef:
 		m.ResetRef()
+		return nil
+	case ledgerentry.FieldReversesRef:
+		m.ResetReversesRef()
 		return nil
 	case ledgerentry.FieldCreatedAt:
 		m.ResetCreatedAt()

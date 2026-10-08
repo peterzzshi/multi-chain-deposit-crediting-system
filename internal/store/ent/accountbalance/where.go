@@ -73,11 +73,6 @@ func Held(v string) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldEQ(FieldHeld, v))
 }
 
-// Flagged applies equality check predicate on the "flagged" field. It's identical to FlaggedEQ.
-func Flagged(v bool) predicate.AccountBalance {
-	return predicate.AccountBalance(sql.FieldEQ(FieldFlagged, v))
-}
-
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
 func Version(v int) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldEQ(FieldVersion, v))
@@ -341,16 +336,6 @@ func HeldEqualFold(v string) predicate.AccountBalance {
 // HeldContainsFold applies the ContainsFold predicate on the "held" field.
 func HeldContainsFold(v string) predicate.AccountBalance {
 	return predicate.AccountBalance(sql.FieldContainsFold(FieldHeld, v))
-}
-
-// FlaggedEQ applies the EQ predicate on the "flagged" field.
-func FlaggedEQ(v bool) predicate.AccountBalance {
-	return predicate.AccountBalance(sql.FieldEQ(FieldFlagged, v))
-}
-
-// FlaggedNEQ applies the NEQ predicate on the "flagged" field.
-func FlaggedNEQ(v bool) predicate.AccountBalance {
-	return predicate.AccountBalance(sql.FieldNEQ(FieldFlagged, v))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.

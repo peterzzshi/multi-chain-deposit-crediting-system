@@ -409,7 +409,7 @@ func (_c *MockTx_HoldsActive_Call) RunAndReturn(run func(ctx context.Context, ch
 }
 
 // InsertEntry provides a mock function for the type MockTx
-func (_mock *MockTx) InsertEntry(ctx context.Context, e domain.Entry) error {
+func (_mock *MockTx) InsertEntry(ctx context.Context, e credit.Entry) error {
 	ret := _mock.Called(ctx, e)
 
 	if len(ret) == 0 {
@@ -417,7 +417,7 @@ func (_mock *MockTx) InsertEntry(ctx context.Context, e domain.Entry) error {
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.Entry) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, credit.Entry) error); ok {
 		r0 = returnFunc(ctx, e)
 	} else {
 		r0 = ret.Error(0)
@@ -432,20 +432,20 @@ type MockTx_InsertEntry_Call struct {
 
 // InsertEntry is a helper method to define mock.On call
 //   - ctx context.Context
-//   - e domain.Entry
+//   - e credit.Entry
 func (_e *MockTx_Expecter) InsertEntry(ctx any, e any) *MockTx_InsertEntry_Call {
 	return &MockTx_InsertEntry_Call{Call: _e.mock.On("InsertEntry", ctx, e)}
 }
 
-func (_c *MockTx_InsertEntry_Call) Run(run func(ctx context.Context, e domain.Entry)) *MockTx_InsertEntry_Call {
+func (_c *MockTx_InsertEntry_Call) Run(run func(ctx context.Context, e credit.Entry)) *MockTx_InsertEntry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 domain.Entry
+		var arg1 credit.Entry
 		if args[1] != nil {
-			arg1 = args[1].(domain.Entry)
+			arg1 = args[1].(credit.Entry)
 		}
 		run(
 			arg0,
@@ -460,22 +460,88 @@ func (_c *MockTx_InsertEntry_Call) Return(err error) *MockTx_InsertEntry_Call {
 	return _c
 }
 
-func (_c *MockTx_InsertEntry_Call) RunAndReturn(run func(ctx context.Context, e domain.Entry) error) *MockTx_InsertEntry_Call {
+func (_c *MockTx_InsertEntry_Call) RunAndReturn(run func(ctx context.Context, e credit.Entry) error) *MockTx_InsertEntry_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReversalOf provides a mock function for the type MockTx
+func (_mock *MockTx) ReversalOf(ctx context.Context, ref string) (bool, error) {
+	ret := _mock.Called(ctx, ref)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReversalOf")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
+		return returnFunc(ctx, ref)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) bool); ok {
+		r0 = returnFunc(ctx, ref)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, ref)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockTx_ReversalOf_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReversalOf'
+type MockTx_ReversalOf_Call struct {
+	*mock.Call
+}
+
+// ReversalOf is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ref string
+func (_e *MockTx_Expecter) ReversalOf(ctx any, ref any) *MockTx_ReversalOf_Call {
+	return &MockTx_ReversalOf_Call{Call: _e.mock.On("ReversalOf", ctx, ref)}
+}
+
+func (_c *MockTx_ReversalOf_Call) Run(run func(ctx context.Context, ref string)) *MockTx_ReversalOf_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_ReversalOf_Call) Return(b bool, err error) *MockTx_ReversalOf_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockTx_ReversalOf_Call) RunAndReturn(run func(ctx context.Context, ref string) (bool, error)) *MockTx_ReversalOf_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SetBalance provides a mock function for the type MockTx
-func (_mock *MockTx) SetBalance(ctx context.Context, account string, asset string, balance *big.Int, flagged bool) error {
-	ret := _mock.Called(ctx, account, asset, balance, flagged)
+func (_mock *MockTx) SetBalance(ctx context.Context, account string, asset string, balance *big.Int) error {
+	ret := _mock.Called(ctx, account, asset, balance)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetBalance")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *big.Int, bool) error); ok {
-		r0 = returnFunc(ctx, account, asset, balance, flagged)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *big.Int) error); ok {
+		r0 = returnFunc(ctx, account, asset, balance)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -492,12 +558,11 @@ type MockTx_SetBalance_Call struct {
 //   - account string
 //   - asset string
 //   - balance *big.Int
-//   - flagged bool
-func (_e *MockTx_Expecter) SetBalance(ctx any, account any, asset any, balance any, flagged any) *MockTx_SetBalance_Call {
-	return &MockTx_SetBalance_Call{Call: _e.mock.On("SetBalance", ctx, account, asset, balance, flagged)}
+func (_e *MockTx_Expecter) SetBalance(ctx any, account any, asset any, balance any) *MockTx_SetBalance_Call {
+	return &MockTx_SetBalance_Call{Call: _e.mock.On("SetBalance", ctx, account, asset, balance)}
 }
 
-func (_c *MockTx_SetBalance_Call) Run(run func(ctx context.Context, account string, asset string, balance *big.Int, flagged bool)) *MockTx_SetBalance_Call {
+func (_c *MockTx_SetBalance_Call) Run(run func(ctx context.Context, account string, asset string, balance *big.Int)) *MockTx_SetBalance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -515,9 +580,88 @@ func (_c *MockTx_SetBalance_Call) Run(run func(ctx context.Context, account stri
 		if args[3] != nil {
 			arg3 = args[3].(*big.Int)
 		}
-		var arg4 bool
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTx_SetBalance_Call) Return(err error) *MockTx_SetBalance_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockTx_SetBalance_Call) RunAndReturn(run func(ctx context.Context, account string, asset string, balance *big.Int) error) *MockTx_SetBalance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetBalanceOptimistic provides a mock function for the type MockTx
+func (_mock *MockTx) SetBalanceOptimistic(ctx context.Context, account string, asset string, balance *big.Int, expectedVersion int) (bool, error) {
+	ret := _mock.Called(ctx, account, asset, balance, expectedVersion)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBalanceOptimistic")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *big.Int, int) (bool, error)); ok {
+		return returnFunc(ctx, account, asset, balance, expectedVersion)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *big.Int, int) bool); ok {
+		r0 = returnFunc(ctx, account, asset, balance, expectedVersion)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, *big.Int, int) error); ok {
+		r1 = returnFunc(ctx, account, asset, balance, expectedVersion)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockTx_SetBalanceOptimistic_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetBalanceOptimistic'
+type MockTx_SetBalanceOptimistic_Call struct {
+	*mock.Call
+}
+
+// SetBalanceOptimistic is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account string
+//   - asset string
+//   - balance *big.Int
+//   - expectedVersion int
+func (_e *MockTx_Expecter) SetBalanceOptimistic(ctx any, account any, asset any, balance any, expectedVersion any) *MockTx_SetBalanceOptimistic_Call {
+	return &MockTx_SetBalanceOptimistic_Call{Call: _e.mock.On("SetBalanceOptimistic", ctx, account, asset, balance, expectedVersion)}
+}
+
+func (_c *MockTx_SetBalanceOptimistic_Call) Run(run func(ctx context.Context, account string, asset string, balance *big.Int, expectedVersion int)) *MockTx_SetBalanceOptimistic_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 *big.Int
+		if args[3] != nil {
+			arg3 = args[3].(*big.Int)
+		}
+		var arg4 int
 		if args[4] != nil {
-			arg4 = args[4].(bool)
+			arg4 = args[4].(int)
 		}
 		run(
 			arg0,
@@ -530,12 +674,12 @@ func (_c *MockTx_SetBalance_Call) Run(run func(ctx context.Context, account stri
 	return _c
 }
 
-func (_c *MockTx_SetBalance_Call) Return(err error) *MockTx_SetBalance_Call {
-	_c.Call.Return(err)
+func (_c *MockTx_SetBalanceOptimistic_Call) Return(b bool, err error) *MockTx_SetBalanceOptimistic_Call {
+	_c.Call.Return(b, err)
 	return _c
 }
 
-func (_c *MockTx_SetBalance_Call) RunAndReturn(run func(ctx context.Context, account string, asset string, balance *big.Int, flagged bool) error) *MockTx_SetBalance_Call {
+func (_c *MockTx_SetBalanceOptimistic_Call) RunAndReturn(run func(ctx context.Context, account string, asset string, balance *big.Int, expectedVersion int) (bool, error)) *MockTx_SetBalanceOptimistic_Call {
 	_c.Call.Return(run)
 	return _c
 }

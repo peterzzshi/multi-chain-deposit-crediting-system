@@ -114,13 +114,13 @@ func (_u *DepositUpdate) SetNillableMode(v *domain.Mode) *DepositUpdate {
 }
 
 // SetState sets the "state" field.
-func (_u *DepositUpdate) SetState(v deposit.State) *DepositUpdate {
+func (_u *DepositUpdate) SetState(v domain.State) *DepositUpdate {
 	_u.mutation.SetState(v)
 	return _u
 }
 
 // SetNillableState sets the "state" field if the given value is not nil.
-func (_u *DepositUpdate) SetNillableState(v *deposit.State) *DepositUpdate {
+func (_u *DepositUpdate) SetNillableState(v *domain.State) *DepositUpdate {
 	if v != nil {
 		_u.SetState(*v)
 	}
@@ -346,12 +346,12 @@ func (_u *DepositUpdate) check() error {
 		}
 	}
 	if v, ok := _u.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
+		if err := deposit.ModeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.State(); ok {
-		if err := deposit.StateValidator(v); err != nil {
+		if err := deposit.StateValidator(string(v)); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Deposit.state": %w`, err)}
 		}
 	}
@@ -386,10 +386,10 @@ func (_u *DepositUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		_spec.SetField(deposit.FieldAmount, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Mode(); ok {
-		_spec.SetField(deposit.FieldMode, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldMode, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.State(); ok {
-		_spec.SetField(deposit.FieldState, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldState, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreditCycle(); ok {
 		_spec.SetField(deposit.FieldCreditCycle, field.TypeInt, value)
@@ -544,13 +544,13 @@ func (_u *DepositUpdateOne) SetNillableMode(v *domain.Mode) *DepositUpdateOne {
 }
 
 // SetState sets the "state" field.
-func (_u *DepositUpdateOne) SetState(v deposit.State) *DepositUpdateOne {
+func (_u *DepositUpdateOne) SetState(v domain.State) *DepositUpdateOne {
 	_u.mutation.SetState(v)
 	return _u
 }
 
 // SetNillableState sets the "state" field if the given value is not nil.
-func (_u *DepositUpdateOne) SetNillableState(v *deposit.State) *DepositUpdateOne {
+func (_u *DepositUpdateOne) SetNillableState(v *domain.State) *DepositUpdateOne {
 	if v != nil {
 		_u.SetState(*v)
 	}
@@ -789,12 +789,12 @@ func (_u *DepositUpdateOne) check() error {
 		}
 	}
 	if v, ok := _u.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
+		if err := deposit.ModeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.State(); ok {
-		if err := deposit.StateValidator(v); err != nil {
+		if err := deposit.StateValidator(string(v)); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Deposit.state": %w`, err)}
 		}
 	}
@@ -846,10 +846,10 @@ func (_u *DepositUpdateOne) sqlSave(ctx context.Context) (_node *Deposit, err er
 		_spec.SetField(deposit.FieldAmount, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Mode(); ok {
-		_spec.SetField(deposit.FieldMode, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldMode, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.State(); ok {
-		_spec.SetField(deposit.FieldState, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldState, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreditCycle(); ok {
 		_spec.SetField(deposit.FieldCreditCycle, field.TypeInt, value)

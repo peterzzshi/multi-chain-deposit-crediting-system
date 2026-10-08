@@ -23,6 +23,8 @@ func (LedgerEntry) Fields() []ent.Field {
 		field.String("amount").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(78,0)"}),
 		field.String("ref").NotEmpty().Unique().Immutable(),
+		// Set only on reversals: the credit they compensate.
+		field.String("reverses_ref").Optional().Nillable().Immutable(),
 		field.Time("created_at").Default(timeNow).Immutable(),
 	}
 }
@@ -31,6 +33,7 @@ func (LedgerEntry) Fields() []ent.Field {
 func (LedgerEntry) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("account", "asset"),
-		index.Fields("ref"), // duplicate detection performance
+		index.Fields("ref"),          // duplicate detection performance
+		index.Fields("reverses_ref"), // reversal lookup by original credit
 	}
 }

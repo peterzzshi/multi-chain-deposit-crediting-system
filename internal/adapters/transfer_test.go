@@ -1,9 +1,10 @@
-package domain
+package adapters
 
 import (
 	"errors"
 	"testing"
 
+	"deposit-crediting/internal/domain"
 	"deposit-crediting/internal/errs"
 )
 
@@ -99,7 +100,7 @@ func TestNewTokenTransferRejectsBadInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := NewTokenTransfer(NetworkID(tt.chain), tt.txHash, tt.contract, tt.logIndex); !errors.Is(err, errs.ErrInvalidPart) {
+			if _, err := NewTokenTransfer(domain.NetworkID(tt.chain), tt.txHash, tt.contract, tt.logIndex); !errors.Is(err, errs.ErrInvalidPart) {
 				t.Errorf("NewTokenTransfer(%q, %q, %q, %d) error = %v; want errs.ErrInvalidPart",
 					tt.chain, tt.txHash, tt.contract, tt.logIndex, err)
 			}

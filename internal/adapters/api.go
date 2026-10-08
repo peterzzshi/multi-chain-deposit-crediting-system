@@ -5,6 +5,7 @@ import (
 	"math/big"
 )
 
+// TransferJSON is the JSON representation of Transfer for HTTP API serialization.
 type TransferJSON struct {
 	Kind       TransferKind `json:"kind"`
 	TxHash     string       `json:"txHash"`

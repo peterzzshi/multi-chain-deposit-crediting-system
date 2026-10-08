@@ -74,6 +74,11 @@ func Ref(v string) predicate.LedgerEntry {
 	return predicate.LedgerEntry(sql.FieldEQ(FieldRef, v))
 }
 
+// ReversesRef applies equality check predicate on the "reverses_ref" field. It's identical to ReversesRefEQ.
+func ReversesRef(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldEQ(FieldReversesRef, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.LedgerEntry {
 	return predicate.LedgerEntry(sql.FieldEQ(FieldCreatedAt, v))
@@ -357,6 +362,81 @@ func RefEqualFold(v string) predicate.LedgerEntry {
 // RefContainsFold applies the ContainsFold predicate on the "ref" field.
 func RefContainsFold(v string) predicate.LedgerEntry {
 	return predicate.LedgerEntry(sql.FieldContainsFold(FieldRef, v))
+}
+
+// ReversesRefEQ applies the EQ predicate on the "reverses_ref" field.
+func ReversesRefEQ(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldEQ(FieldReversesRef, v))
+}
+
+// ReversesRefNEQ applies the NEQ predicate on the "reverses_ref" field.
+func ReversesRefNEQ(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldNEQ(FieldReversesRef, v))
+}
+
+// ReversesRefIn applies the In predicate on the "reverses_ref" field.
+func ReversesRefIn(vs ...string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldIn(FieldReversesRef, vs...))
+}
+
+// ReversesRefNotIn applies the NotIn predicate on the "reverses_ref" field.
+func ReversesRefNotIn(vs ...string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldNotIn(FieldReversesRef, vs...))
+}
+
+// ReversesRefGT applies the GT predicate on the "reverses_ref" field.
+func ReversesRefGT(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldGT(FieldReversesRef, v))
+}
+
+// ReversesRefGTE applies the GTE predicate on the "reverses_ref" field.
+func ReversesRefGTE(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldGTE(FieldReversesRef, v))
+}
+
+// ReversesRefLT applies the LT predicate on the "reverses_ref" field.
+func ReversesRefLT(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldLT(FieldReversesRef, v))
+}
+
+// ReversesRefLTE applies the LTE predicate on the "reverses_ref" field.
+func ReversesRefLTE(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldLTE(FieldReversesRef, v))
+}
+
+// ReversesRefContains applies the Contains predicate on the "reverses_ref" field.
+func ReversesRefContains(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldContains(FieldReversesRef, v))
+}
+
+// ReversesRefHasPrefix applies the HasPrefix predicate on the "reverses_ref" field.
+func ReversesRefHasPrefix(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldHasPrefix(FieldReversesRef, v))
+}
+
+// ReversesRefHasSuffix applies the HasSuffix predicate on the "reverses_ref" field.
+func ReversesRefHasSuffix(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldHasSuffix(FieldReversesRef, v))
+}
+
+// ReversesRefIsNil applies the IsNil predicate on the "reverses_ref" field.
+func ReversesRefIsNil() predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldIsNull(FieldReversesRef))
+}
+
+// ReversesRefNotNil applies the NotNil predicate on the "reverses_ref" field.
+func ReversesRefNotNil() predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldNotNull(FieldReversesRef))
+}
+
+// ReversesRefEqualFold applies the EqualFold predicate on the "reverses_ref" field.
+func ReversesRefEqualFold(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldEqualFold(FieldReversesRef, v))
+}
+
+// ReversesRefContainsFold applies the ContainsFold predicate on the "reverses_ref" field.
+func ReversesRefContainsFold(v string) predicate.LedgerEntry {
+	return predicate.LedgerEntry(sql.FieldContainsFold(FieldReversesRef, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

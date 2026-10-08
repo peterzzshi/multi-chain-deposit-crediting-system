@@ -3,7 +3,6 @@
 package deposit
 
 import (
-	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -95,6 +94,10 @@ var (
 	AccountValidator func(string) error
 	// AddressValidator is a validator for the "address" field. It is called by the builders before save.
 	AddressValidator func(string) error
+	// ModeValidator is a validator for the "mode" field. It is called by the builders before save.
+	ModeValidator func(string) error
+	// StateValidator is a validator for the "state" field. It is called by the builders before save.
+	StateValidator func(string) error
 	// DefaultCreditCycle holds the default value on creation for the "credit_cycle" field.
 	DefaultCreditCycle int
 	// DefaultHeld holds the default value on creation for the "held" field.
@@ -106,60 +109,6 @@ var (
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
 )
-
-// Mode defines the type for the "mode" enum field.
-type Mode string
-
-// Mode values.
-const (
-	ModeSelfBuilt Mode = "self_built"
-	ModeCustodian Mode = "custodian"
-)
-
-func (m Mode) String() string {
-	return string(m)
-}
-
-// ModeValidator is a validator for the "mode" field enum values. It is called by the builders before save.
-func ModeValidator(m Mode) error {
-	switch m {
-	case ModeSelfBuilt, ModeCustodian:
-		return nil
-	default:
-		return fmt.Errorf("deposit: invalid enum value for mode field: %q", m)
-	}
-}
-
-// State defines the type for the "state" enum field.
-type State string
-
-// StatePENDING is the default value of the State enum.
-const DefaultState = StatePENDING
-
-// State values.
-const (
-	StatePENDING       State = "PENDING"
-	StateCREDITED      State = "CREDITED"
-	StateFINALIZED     State = "FINALIZED"
-	StateREORGED       State = "REORGED"
-	StateDROPPED       State = "DROPPED"
-	StateREVERSED      State = "REVERSED"
-	StateBELOW_MINIMUM State = "BELOW_MINIMUM"
-)
-
-func (s State) String() string {
-	return string(s)
-}
-
-// StateValidator is a validator for the "state" field enum values. It is called by the builders before save.
-func StateValidator(s State) error {
-	switch s {
-	case StatePENDING, StateCREDITED, StateFINALIZED, StateREORGED, StateDROPPED, StateREVERSED, StateBELOW_MINIMUM:
-		return nil
-	default:
-		return fmt.Errorf("deposit: invalid enum value for state field: %q", s)
-	}
-}
 
 // OrderOption defines the ordering options for the Deposit queries.
 type OrderOption func(*sql.Selector)

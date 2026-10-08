@@ -59,20 +59,6 @@ func (_c *AccountBalanceCreate) SetNillableHeld(v *string) *AccountBalanceCreate
 	return _c
 }
 
-// SetFlagged sets the "flagged" field.
-func (_c *AccountBalanceCreate) SetFlagged(v bool) *AccountBalanceCreate {
-	_c.mutation.SetFlagged(v)
-	return _c
-}
-
-// SetNillableFlagged sets the "flagged" field if the given value is not nil.
-func (_c *AccountBalanceCreate) SetNillableFlagged(v *bool) *AccountBalanceCreate {
-	if v != nil {
-		_c.SetFlagged(*v)
-	}
-	return _c
-}
-
 // SetVersion sets the "version" field.
 func (_c *AccountBalanceCreate) SetVersion(v int) *AccountBalanceCreate {
 	_c.mutation.SetVersion(v)
@@ -130,10 +116,6 @@ func (_c *AccountBalanceCreate) defaults() {
 		v := accountbalance.DefaultHeld
 		_c.mutation.SetHeld(v)
 	}
-	if _, ok := _c.mutation.Flagged(); !ok {
-		v := accountbalance.DefaultFlagged
-		_c.mutation.SetFlagged(v)
-	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := accountbalance.DefaultVersion
 		_c.mutation.SetVersion(v)
@@ -163,9 +145,6 @@ func (_c *AccountBalanceCreate) check() error {
 	}
 	if _, ok := _c.mutation.Held(); !ok {
 		return &ValidationError{Name: "held", err: errors.New(`ent: missing required field "AccountBalance.held"`)}
-	}
-	if _, ok := _c.mutation.Flagged(); !ok {
-		return &ValidationError{Name: "flagged", err: errors.New(`ent: missing required field "AccountBalance.flagged"`)}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "AccountBalance.version"`)}
@@ -211,10 +190,6 @@ func (_c *AccountBalanceCreate) createSpec() (*AccountBalance, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Held(); ok {
 		_spec.SetField(accountbalance.FieldHeld, field.TypeString, value)
 		_node.Held = value
-	}
-	if value, ok := _c.mutation.Flagged(); ok {
-		_spec.SetField(accountbalance.FieldFlagged, field.TypeBool, value)
-		_node.Flagged = value
 	}
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(accountbalance.FieldVersion, field.TypeInt, value)

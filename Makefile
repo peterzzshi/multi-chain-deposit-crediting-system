@@ -11,6 +11,9 @@ test:
 
 itest:
 	docker compose up -d postgres
+	# The integration suite is being rebuilt against the current store/adapter
+	# API; the old -tags=integration files were removed and no tagged tests
+	# exist yet. This target is expected to build nothing until they return.
 	# -p 1: integration packages share one Postgres; parallel package runs
 	# would let one package's cleanup delete another's rows mid-test.
 	go test -race -tags=integration -p 1 ./internal/...

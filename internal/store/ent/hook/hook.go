@@ -20,18 +20,6 @@ func (f AccountBalanceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountBalanceMutation", m)
 }
 
-// The AssetConfigFunc type is an adapter to allow the use of ordinary
-// function as AssetConfig mutator.
-type AssetConfigFunc func(context.Context, *ent.AssetConfigMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f AssetConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.AssetConfigMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AssetConfigMutation", m)
-}
-
 // The CanonicalBlockFunc type is an adapter to allow the use of ordinary
 // function as CanonicalBlock mutator.
 type CanonicalBlockFunc func(context.Context, *ent.CanonicalBlockMutation) (ent.Value, error)

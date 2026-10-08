@@ -24,6 +24,8 @@ const (
 	FieldAmount = "amount"
 	// FieldRef holds the string denoting the ref field in the database.
 	FieldRef = "ref"
+	// FieldReversesRef holds the string denoting the reverses_ref field in the database.
+	FieldReversesRef = "reverses_ref"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the ledgerentry in the database.
@@ -38,6 +40,7 @@ var Columns = []string{
 	FieldType,
 	FieldAmount,
 	FieldRef,
+	FieldReversesRef,
 	FieldCreatedAt,
 }
 
@@ -117,6 +120,11 @@ func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByRef orders the results by the ref field.
 func ByRef(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRef, opts...).ToFunc()
+}
+
+// ByReversesRef orders the results by the reverses_ref field.
+func ByReversesRef(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReversesRef, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

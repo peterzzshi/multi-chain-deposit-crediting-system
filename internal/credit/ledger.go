@@ -1,4 +1,4 @@
-package domain
+package credit
 
 import (
 	"fmt"
@@ -21,13 +21,15 @@ type Entry struct {
 	Type    TransactionType
 	Amount  *big.Int
 	Ref     string
+	// Set only on a reversal: the ref of the credit it compensates.
+	ReversesRef string
 }
 
-func New(typ TransactionType, account, asset string, amount *big.Int, ref string) (Entry, error) {
-	switch typ {
+func New(transactionType TransactionType, account, asset string, amount *big.Int, ref string) (Entry, error) {
+	switch transactionType {
 	case Credit, Debit, Reversal:
 	default:
-		return Entry{}, fmt.Errorf("%w: unknown transaction type %q", errs.ErrInvalidEntry, typ)
+		return Entry{}, fmt.Errorf("%w: unknown transaction type %q", errs.ErrInvalidEntry, transactionType)
 	}
 	if account == "" || asset == "" || ref == "" {
 		return Entry{}, fmt.Errorf("%w: account, asset and ref must be non-empty", errs.ErrInvalidEntry)
@@ -35,16 +37,29 @@ func New(typ TransactionType, account, asset string, amount *big.Int, ref string
 	if amount == nil || amount.Sign() <= 0 {
 		return Entry{}, fmt.Errorf("%w: amount must be positive, got %v", errs.ErrInvalidEntry, amount)
 	}
-	return Entry{Account: account, Asset: asset, Type: typ, Amount: new(big.Int).Set(amount), Ref: ref}, nil
+	return Entry{Account: account, Asset: asset, Type: transactionType, Amount: new(big.Int).Set(amount), Ref: ref}, nil
 }
 
-// Reverse constructs the compensating entry for a credit; the derived ref
-// keeps the pair auditable and re-applying a reversal a no-op.
+// reversalRef derives the reversal's own ref. The prefix is required, not
+// cosmetic: ref is unique, so a reversal cannot reuse the credit's ref. The
+// reader queries ReversesRef, so breaking this format fails on the unique
+// constraint instead of silently missing the pairing.
+func reversalRef(ref string) string {
+	return "reversal:" + ref
+}
+
+// Reverse builds the compensating entry for a credit. The derived ref makes
+// re-applying a reversal a no-op; ReversesRef records the pairing.
 func Reverse(original Entry) (Entry, error) {
 	if original.Type != Credit {
 		return Entry{}, fmt.Errorf("%w: only credits can be reversed, got %s", errs.ErrInvalidEntry, original.Type)
 	}
-	return New(Reversal, original.Account, original.Asset, original.Amount, "reversal:"+original.Ref)
+	entry, err := New(Reversal, original.Account, original.Asset, original.Amount, reversalRef(original.Ref))
+	if err != nil {
+		return Entry{}, err
+	}
+	entry.ReversesRef = original.Ref
+	return entry, nil
 }
 
 // Apply folds an entry into a balance without mutating the input; a nil

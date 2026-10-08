@@ -15,7 +15,6 @@ var (
 		{Name: "asset", Type: field.TypeString},
 		{Name: "balance", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
 		{Name: "held", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
-		{Name: "flagged", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 0},
 	}
 	// AccountBalancesTable holds the schema information for the "account_balances" table.
@@ -28,33 +27,6 @@ var (
 				Name:    "accountbalance_account_asset",
 				Unique:  true,
 				Columns: []*schema.Column{AccountBalancesColumns[1], AccountBalancesColumns[2]},
-			},
-		},
-	}
-	// AssetConfigsColumns holds the columns for the "asset_configs" table.
-	AssetConfigsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "chain", Type: field.TypeString},
-		{Name: "asset", Type: field.TypeString},
-		{Name: "decimals", Type: field.TypeInt},
-		{Name: "mode", Type: field.TypeEnum, Enums: []string{"self_built", "custodian"}},
-		{Name: "min_amount", Type: field.TypeString, Default: "0", SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
-		{Name: "n_credit", Type: field.TypeInt},
-		{Name: "n_finalize", Type: field.TypeInt},
-		{Name: "reorg_window", Type: field.TypeInt},
-		{Name: "exposure_cap", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
-		{Name: "tier_amount", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
-	}
-	// AssetConfigsTable holds the schema information for the "asset_configs" table.
-	AssetConfigsTable = &schema.Table{
-		Name:       "asset_configs",
-		Columns:    AssetConfigsColumns,
-		PrimaryKey: []*schema.Column{AssetConfigsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "assetconfig_chain_asset",
-				Unique:  true,
-				Columns: []*schema.Column{AssetConfigsColumns[1], AssetConfigsColumns[2]},
 			},
 		},
 	}
@@ -105,8 +77,8 @@ var (
 		{Name: "account", Type: field.TypeString},
 		{Name: "address", Type: field.TypeString},
 		{Name: "amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
-		{Name: "mode", Type: field.TypeEnum, Enums: []string{"self_built", "custodian"}},
-		{Name: "state", Type: field.TypeEnum, Enums: []string{"PENDING", "CREDITED", "FINALIZED", "REORGED", "DROPPED", "REVERSED", "BELOW_MINIMUM"}, Default: "PENDING"},
+		{Name: "mode", Type: field.TypeString},
+		{Name: "state", Type: field.TypeString},
 		{Name: "credit_cycle", Type: field.TypeInt, Default: 0},
 		{Name: "block_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "block_hash", Type: field.TypeString, Nullable: true},
@@ -211,6 +183,7 @@ var (
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"credit", "debit", "reversal"}},
 		{Name: "amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "numeric(78,0)"}},
 		{Name: "ref", Type: field.TypeString, Unique: true},
+		{Name: "reverses_ref", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// LedgerEntriesTable holds the schema information for the "ledger_entries" table.
@@ -228,6 +201,11 @@ var (
 				Name:    "ledgerentry_ref",
 				Unique:  false,
 				Columns: []*schema.Column{LedgerEntriesColumns[5]},
+			},
+			{
+				Name:    "ledgerentry_reverses_ref",
+				Unique:  false,
+				Columns: []*schema.Column{LedgerEntriesColumns[6]},
 			},
 		},
 	}
@@ -255,7 +233,6 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AccountBalancesTable,
-		AssetConfigsTable,
 		CanonicalBlocksTable,
 		ChainCursorsTable,
 		DepositsTable,

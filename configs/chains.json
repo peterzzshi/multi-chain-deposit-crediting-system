@@ -1,0 +1,12 @@
+[
+  {
+    "network_id": "stubchain",
+    "chain_api_url": "http://chain-node:9100",
+    "poll_interval_ms": 2000
+  },
+  {
+    "network_id": "fastchain",
+    "chain_api_url": "http://chain-node:9100",
+    "poll_interval_ms": 1000
+  }
+]

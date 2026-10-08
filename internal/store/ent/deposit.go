@@ -33,7 +33,7 @@ type Deposit struct {
 	// Mode holds the value of the "mode" field.
 	Mode domain.Mode `json:"mode,omitempty"`
 	// State holds the value of the "state" field.
-	State deposit.State `json:"state,omitempty"`
+	State domain.State `json:"state,omitempty"`
 	// CreditCycle holds the value of the "credit_cycle" field.
 	CreditCycle int `json:"credit_cycle,omitempty"`
 	// BlockHeight holds the value of the "block_height" field.
@@ -135,7 +135,7 @@ func (_m *Deposit) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field state", values[i])
 			} else if value.Valid {
-				_m.State = deposit.State(value.String)
+				_m.State = domain.State(value.String)
 			}
 		case deposit.FieldCreditCycle:
 			if value, ok := values[i].(*sql.NullInt64); !ok {

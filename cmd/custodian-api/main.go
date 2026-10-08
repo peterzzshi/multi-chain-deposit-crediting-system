@@ -10,6 +10,7 @@ import (
 
 	"deposit-crediting/internal/config"
 	"deposit-crediting/internal/custodian"
+	"deposit-crediting/internal/custodianmock"
 )
 
 type faultKind string
@@ -23,7 +24,7 @@ const (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
-	c := custodian.NewMock()
+	c := custodianmock.NewMock()
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /v1/deposits", func(w http.ResponseWriter, r *http.Request) {
@@ -71,17 +72,17 @@ func main() {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		var opts []custodian.ObserveOption
+		var opts []custodianmock.ObserveOption
 		for _, fault := range req.Faults {
 			switch fault {
 			case faultDuplicate:
-				opts = append(opts, custodian.Duplicate())
+				opts = append(opts, custodianmock.Duplicate())
 			case faultReordered:
-				opts = append(opts, custodian.Reordered())
+				opts = append(opts, custodianmock.Reordered())
 			case faultDelayed:
-				opts = append(opts, custodian.Delayed())
+				opts = append(opts, custodianmock.Delayed())
 			case faultDropped:
-				opts = append(opts, custodian.Dropped())
+				opts = append(opts, custodianmock.Dropped())
 			default:
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown fault " + string(fault)})
 				return

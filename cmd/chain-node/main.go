@@ -1,4 +1,3 @@
-// chain-node runs the chain node JSON-RPC API (stub implementation for testing).
 package main
 
 import (
@@ -6,14 +5,14 @@ import (
 	"net/http"
 	"os"
 
-	"deposit-crediting/internal/adapters"
+	"deposit-crediting/internal/chaintest"
 	"deposit-crediting/internal/config"
 )
 
 func main() {
 	addr := config.RequireEnv("LISTEN_ADDR")
 	slog.Info("chain-node listening", "addr", addr)
-	if err := http.ListenAndServe(addr, adapters.Handler(adapters.NewChain())); err != nil {
+	if err := http.ListenAndServe(addr, chaintest.Handler(chaintest.NewChain())); err != nil {
 		slog.Error("chain-node exited", "err", err)
 		os.Exit(1)
 	}

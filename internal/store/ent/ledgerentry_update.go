@@ -159,6 +159,9 @@ func (_u *LedgerEntryUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(ledgerentry.FieldAmount, field.TypeString, value)
 	}
+	if _u.mutation.ReversesRefCleared() {
+		_spec.ClearField(ledgerentry.FieldReversesRef, field.TypeString)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{ledgerentry.Label}
@@ -340,6 +343,9 @@ func (_u *LedgerEntryUpdateOne) sqlSave(ctx context.Context) (_node *LedgerEntry
 	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(ledgerentry.FieldAmount, field.TypeString, value)
+	}
+	if _u.mutation.ReversesRefCleared() {
+		_spec.ClearField(ledgerentry.FieldReversesRef, field.TypeString)
 	}
 	_node = &LedgerEntry{config: _u.config}
 	_spec.Assign = _node.assignValues

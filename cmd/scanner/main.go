@@ -4,8 +4,10 @@ package main
 import (
 	"context"
 	"log/slog"
+	"math/big"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"deposit-crediting/internal/adapters"
@@ -27,29 +29,76 @@ func main() {
 		fatal("open database", err)
 	}
 	defer db.Close()
+
 	assets, err := config.LoadAssets(config.RequireEnv("ASSETS_CONFIG"))
 	if err != nil {
 		fatal("load assets config", err)
 	}
-	if err := store.UpsertAssetConfigs(context.Background(), db, assets); err != nil {
-		fatal("apply assets config", err)
+	assetMap, err := config.NewAssetConfigMap(assets)
+	if err != nil {
+		fatal("build asset config map", err)
 	}
 
-	chainID := config.RequireEnv("CHAIN_ID")
-	engine := credit.NewEngine(store.New(db))
-	sc := scanner.New(scanner.Config{
-		ChainID:      domain.NetworkID(chainID),
-		StartHeight:  config.RequireUint64("START_HEIGHT"),
-		MaxBatch:     config.RequireUint64("MAX_BATCH"),
-		PollInterval: config.RequireDuration("POLL_INTERVAL"),
-	}, adapters.New(config.RequireEnv("CHAIN_API_URL")), store.NewScannerStore(db), engine)
+	chains, err := config.LoadChains(config.RequireEnv("CHAINS_CONFIG"))
+	if err != nil {
+		fatal("load chains config", err)
+	}
+
+	creditStore := store.New(db)
+	for _, chain := range chains {
+		chainAssets := assetMap.ForChain(chain.NetworkID)
+		tiers := make(map[string]*big.Int)
+		for _, ac := range chainAssets {
+			if ac.TierAmount != nil {
+				tiers[ac.Asset] = ac.TierAmount
+			}
+		}
+		creditStore.SetTierAmounts(string(chain.NetworkID), tiers)
+	}
+
+	engine := credit.NewEngine(creditStore)
+	scannerStore := store.NewScannerStore(db)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	slog.Info("scanner starting", "chain", chainID)
-	if err := sc.Run(ctx); err != nil && ctx.Err() == nil {
-		fatal("scanner stopped", err)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, chain := range chains {
+		wg.Add(1)
+		go func(chain config.ChainConfig) {
+			defer wg.Done()
+
+			chainAssets := assetMap.ForChainAndMode(chain.NetworkID, "self_built")
+			assetConfigs := make(map[string]domain.AssetPolicy, len(chainAssets))
+			for _, ac := range chainAssets {
+				assetConfigs[ac.Asset] = domain.AssetPolicy{
+					Asset:       ac.Asset,
+					MinAmount:   ac.MinAmount,
+					NCredit:     ac.NCredit,
+					NFinalize:   ac.NFinalize,
+					ReorgWindow: ac.ReorgWindow,
+				}
+			}
+
+			sc := scanner.New(scanner.Config{
+				ChainID:      chain.NetworkID,
+				StartHeight:  config.RequireUint64("START_HEIGHT"),
+				MaxBatch:     config.RequirePositiveUint64("MAX_BATCH"),
+				PollInterval: chain.PollInterval,
+			}, adapters.New(chain.ChainAPIURL), scannerStore, engine, assetConfigs)
+
+			slog.Info("scanner starting", "chain", chain.NetworkID, "assets", len(assetConfigs))
+			if err := sc.Run(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("scanner stopped", "chain", chain.NetworkID, "err", err)
+				cancel()
+			}
+		}(chain)
 	}
+
+	slog.Info("scanners started", "chains", len(chains))
+	wg.Wait()
 }
 
 func fatal(what string, err error) {

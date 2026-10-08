@@ -64,16 +64,8 @@ func (_c *DepositCreate) SetMode(v domain.Mode) *DepositCreate {
 }
 
 // SetState sets the "state" field.
-func (_c *DepositCreate) SetState(v deposit.State) *DepositCreate {
+func (_c *DepositCreate) SetState(v domain.State) *DepositCreate {
 	_c.mutation.SetState(v)
-	return _c
-}
-
-// SetNillableState sets the "state" field if the given value is not nil.
-func (_c *DepositCreate) SetNillableState(v *deposit.State) *DepositCreate {
-	if v != nil {
-		_c.SetState(*v)
-	}
 	return _c
 }
 
@@ -238,10 +230,6 @@ func (_c *DepositCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *DepositCreate) defaults() {
-	if _, ok := _c.mutation.State(); !ok {
-		v := deposit.DefaultState
-		_c.mutation.SetState(v)
-	}
 	if _, ok := _c.mutation.CreditCycle(); !ok {
 		v := deposit.DefaultCreditCycle
 		_c.mutation.SetCreditCycle(v)
@@ -309,7 +297,7 @@ func (_c *DepositCreate) check() error {
 		return &ValidationError{Name: "mode", err: errors.New(`ent: missing required field "Deposit.mode"`)}
 	}
 	if v, ok := _c.mutation.Mode(); ok {
-		if err := deposit.ModeValidator(deposit.Mode(v)); err != nil {
+		if err := deposit.ModeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Deposit.mode": %w`, err)}
 		}
 	}
@@ -317,7 +305,7 @@ func (_c *DepositCreate) check() error {
 		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "Deposit.state"`)}
 	}
 	if v, ok := _c.mutation.State(); ok {
-		if err := deposit.StateValidator(v); err != nil {
+		if err := deposit.StateValidator(string(v)); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Deposit.state": %w`, err)}
 		}
 	}
@@ -384,11 +372,11 @@ func (_c *DepositCreate) createSpec() (*Deposit, *sqlgraph.CreateSpec) {
 		_node.Amount = value
 	}
 	if value, ok := _c.mutation.Mode(); ok {
-		_spec.SetField(deposit.FieldMode, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldMode, field.TypeString, value)
 		_node.Mode = value
 	}
 	if value, ok := _c.mutation.State(); ok {
-		_spec.SetField(deposit.FieldState, field.TypeEnum, value)
+		_spec.SetField(deposit.FieldState, field.TypeString, value)
 		_node.State = value
 	}
 	if value, ok := _c.mutation.CreditCycle(); ok {

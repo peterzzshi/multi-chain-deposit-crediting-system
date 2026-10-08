@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"time"
 
 	"deposit-crediting/internal/adapters"
@@ -26,43 +25,7 @@ type Cursor struct {
 	Hash   string
 }
 
-type AssetConfig struct {
-	Asset       string
-	MinAmount   *big.Int
-	NCredit     uint64
-	NFinalize   uint64
-	ReorgWindow uint64
-}
-
-type Tracked struct {
-	TransferID string
-	Asset      string
-	State      domain.State
-	Height     uint64
-}
-
-type Reorged struct {
-	TransferID string
-	Asset      string
-	Height     *uint64
-}
-
-type OpenParams struct {
-	TransferID string
-	State      domain.State
-	Chain      string
-	Asset      string
-	Account    string
-	Address    string
-	Amount     *big.Int
-	Height     uint64
-	Hash       string
-	TxHash     string
-}
-
-// Store is the scanner's persistence boundary; implemented by
-// internal/store. Queries are scoped to one chain; the asset policy decides
-// whether a matched transfer uses the self-built path.
+// Store is the scanner's persistence boundary; implemented by internal/store.
 type Store interface {
 	Cursor(ctx context.Context, chainID string) (Cursor, bool, error)
 	SaveCursor(ctx context.Context, chainID string, c Cursor) error
@@ -70,36 +33,36 @@ type Store interface {
 	// BlockHashAt returns "" when the height is not recorded.
 	BlockHashAt(ctx context.Context, chainID string, height uint64) (string, error)
 	DropBlocksAbove(ctx context.Context, chainID string, height uint64) error
-	AssetConfigs(ctx context.Context, chainID string) ([]AssetConfig, error)
 	ResolveRecipients(ctx context.Context, chainID string, addrs []string) (map[string]string, error)
-	OpenDeposit(ctx context.Context, p OpenParams) (domain.OpenResult, error)
+	// OpenDeposit returns StateCreated if created, or the existing state if already exists.
+	OpenDeposit(ctx context.Context, p domain.OpenDepositParams) (domain.State, error)
 	ReincludeDeposit(ctx context.Context, transferID string, height uint64, hash string) error
-	DepositState(ctx context.Context, transferID string) (domain.State, error)
-	TrackedDeposits(ctx context.Context, chainID string) ([]Tracked, error)
-	ReorgedDeposits(ctx context.Context, chainID string) ([]Reorged, error)
+	TrackedDeposits(ctx context.Context, chainID string) ([]domain.TrackedDeposit, error)
+	ReorgedDeposits(ctx context.Context, chainID string) ([]domain.ReorgedDeposit, error)
 	MarkReorged(ctx context.Context, transferID string, height uint64) error
 	HasCredit(ctx context.Context, transferID string) (bool, error)
 }
 
 type Scanner struct {
-	chain  adapters.Client
-	store  Store
-	engine *credit.Engine
-	cfg    Config
+	chain        adapters.Client
+	store        Store
+	engine       *credit.Engine
+	cfg          Config
+	assetConfigs map[string]domain.AssetPolicy // asset -> config, pre-filtered for this chain + self_built mode
 }
 
-func New(cfg Config, c adapters.Client, st Store, e *credit.Engine) *Scanner {
-	return &Scanner{chain: c, store: st, engine: e, cfg: cfg}
+func New(cfg Config, c adapters.Client, st Store, e *credit.Engine, assetConfigs map[string]domain.AssetPolicy) *Scanner {
+	return &Scanner{
+		chain:        c,
+		store:        st,
+		engine:       e,
+		cfg:          cfg,
+		assetConfigs: assetConfigs,
+	}
 }
 
-// Run polls until ctx is done. Inconsistent chain data stops the scanner.
+// Run polls until ctx is done. errs.ErrChainInconsistent stops the scanner.
 func (s *Scanner) Run(ctx context.Context) error {
-	if s.cfg.PollInterval <= 0 {
-		return fmt.Errorf("scanner: poll interval must be positive")
-	}
-	if s.cfg.MaxBatch == 0 {
-		return fmt.Errorf("scanner: max batch must be positive")
-	}
 	ticker := time.NewTicker(s.cfg.PollInterval)
 	defer ticker.Stop()
 	for {
@@ -119,29 +82,27 @@ func (s *Scanner) Run(ctx context.Context) error {
 
 // Tick runs one scan iteration.
 func (s *Scanner) Tick(ctx context.Context) error {
-	if s.cfg.MaxBatch == 0 {
-		return fmt.Errorf("scanner: max batch must be positive")
-	}
 	head, err := s.chain.Head(ctx)
 	if err != nil {
 		return fmt.Errorf("scanner: head: %w", err)
 	}
-	cursor, found, err := s.store.Cursor(ctx, string(s.cfg.ChainID))
+	loaded, err := s.loadCursor(ctx)
 	if err != nil {
-		return fmt.Errorf("scanner: cursor: %w", err)
-	}
-	if !found {
-		start := max(s.cfg.StartHeight, 1)
-		cursor = Cursor{Height: start - 1}
-	}
-	if err := s.rewindIfReorged(ctx, &cursor, head); err != nil {
 		return err
 	}
-	limit := min(head, cursor.Height+s.cfg.MaxBatch)
-	for h := cursor.Height + 1; h <= limit; h++ {
-		if err := s.processBlock(ctx, h, &cursor); err != nil {
-			return err
-		}
+	cursor, err := s.rewindIfReorged(ctx, loaded, head)
+	if err != nil {
+		return err
+	}
+	next, err := s.scanBlocks(ctx, cursor, head)
+	if err != nil {
+		return err
+	}
+	if next == loaded {
+		// Nothing scanned or rewound, so no deposit can have crossed a
+		// depth threshold. Cursor, not head: a same-height reorg moves
+		// the cursor but not head.
+		return nil
 	}
 	if err := s.advanceDepth(ctx, head); err != nil {
 		return err
@@ -149,99 +110,132 @@ func (s *Scanner) Tick(ctx context.Context) error {
 	return s.expireReorged(ctx, head)
 }
 
-// rewindIfReorged finds the fork, marks orphaned deposits, and resets the cursor.
-func (s *Scanner) rewindIfReorged(ctx context.Context, cursor *Cursor, head uint64) error {
+func (s *Scanner) loadCursor(ctx context.Context) (Cursor, error) {
+	cursor, found, err := s.store.Cursor(ctx, string(s.cfg.ChainID))
+	if err != nil {
+		return Cursor{}, fmt.Errorf("scanner: cursor: %w", err)
+	}
+	if !found {
+		return Cursor{Height: max(s.cfg.StartHeight, 1) - 1}, nil
+	}
+	return cursor, nil
+}
+
+// scanBlocks scans up to MaxBatch blocks, carrying the cursor forward.
+func (s *Scanner) scanBlocks(ctx context.Context, cursor Cursor, head uint64) (Cursor, error) {
+	limit := min(head, cursor.Height+s.cfg.MaxBatch)
+	for h := cursor.Height + 1; h <= limit; h++ {
+		next, err := s.processBlock(ctx, h, cursor)
+		if err != nil {
+			return cursor, err
+		}
+		cursor = next
+	}
+	return cursor, nil
+}
+
+// rewindIfReorged marks deposits orphaned by a reorg and returns the reset cursor.
+func (s *Scanner) rewindIfReorged(ctx context.Context, cursor Cursor, head uint64) (Cursor, error) {
 	if cursor.Hash == "" {
-		return nil
+		return cursor, nil
 	}
 	canonical, found, err := s.chain.BlockHash(ctx, cursor.Height)
 	if err != nil {
-		return fmt.Errorf("scanner: canonical hash at %d: %w", cursor.Height, err)
+		return cursor, fmt.Errorf("scanner: canonical hash at %d: %w", cursor.Height, err)
 	}
 	if found && canonical == cursor.Hash {
-		return nil
+		return cursor, nil
 	}
-	fork := cursor.Height
-	var forkHash string
-	for fork > 0 {
-		fork--
-		stored, err := s.store.BlockHashAt(ctx, string(s.cfg.ChainID), fork)
-		if err != nil {
-			return fmt.Errorf("scanner: recorded hash at %d: %w", fork, err)
-		}
-		canonical, found, err := s.chain.BlockHash(ctx, fork)
-		if err != nil {
-			return fmt.Errorf("scanner: canonical hash at %d: %w", fork, err)
-		}
-		if !found {
-			continue // beyond canonical head: still orphaned
-		}
-		if stored == "" || stored == canonical {
-			forkHash = canonical
-			break
-		}
+	fork, forkHash, err := s.findFork(ctx, cursor.Height)
+	if err != nil {
+		return cursor, err
 	}
 	tracked, err := s.store.TrackedDeposits(ctx, string(s.cfg.ChainID))
 	if err != nil {
-		return fmt.Errorf("scanner: tracked deposits: %w", err)
+		return cursor, fmt.Errorf("scanner: tracked deposits: %w", err)
 	}
 	for _, t := range tracked {
 		if t.Height <= fork || t.Height > cursor.Height {
 			continue
 		}
 		if err := s.engine.ApplyReorg(ctx, t.TransferID, head); err != nil {
-			return fmt.Errorf("scanner: reorg out %s: %w", t.TransferID, err)
+			return cursor, fmt.Errorf("scanner: reorg out %s: %w", t.TransferID, err)
 		}
 	}
 	if err := s.store.DropBlocksAbove(ctx, string(s.cfg.ChainID), fork); err != nil {
-		return fmt.Errorf("scanner: drop blocks above %d: %w", fork, err)
+		return cursor, fmt.Errorf("scanner: drop blocks above %d: %w", fork, err)
 	}
-	*cursor = Cursor{Height: fork, Hash: forkHash}
-	return s.store.SaveCursor(ctx, string(s.cfg.ChainID), *cursor)
+	next := Cursor{Height: fork, Hash: forkHash}
+	if err := s.store.SaveCursor(ctx, string(s.cfg.ChainID), next); err != nil {
+		return cursor, fmt.Errorf("scanner: save cursor %d: %w", fork, err)
+	}
+	return next, nil
 }
 
-func (s *Scanner) processBlock(ctx context.Context, height uint64, cursor *Cursor) error {
+// findFork returns the deepest height below from whose recorded hash still matches
+// the canonical chain.
+func (s *Scanner) findFork(ctx context.Context, from uint64) (uint64, string, error) {
+	if from == 0 {
+		return 0, "", nil
+	}
+	chainID := string(s.cfg.ChainID)
+	for height := from - 1; height > 0; height-- {
+		stored, err := s.store.BlockHashAt(ctx, chainID, height)
+		if err != nil {
+			return 0, "", fmt.Errorf("scanner: recorded hash at %d: %w", height, err)
+		}
+		canonical, found, err := s.chain.BlockHash(ctx, height)
+		if err != nil {
+			return 0, "", fmt.Errorf("scanner: canonical hash at %d: %w", height, err)
+		}
+		if !found {
+			continue // beyond canonical head: still orphaned
+		}
+		if stored == "" || stored == canonical {
+			return height, canonical, nil
+		}
+	}
+	return 0, "", nil
+}
+
+func (s *Scanner) processBlock(ctx context.Context, height uint64, cursor Cursor) (Cursor, error) {
 	b, err := s.chain.Block(ctx, height)
 	if err != nil {
-		return fmt.Errorf("scanner: block %d: %w", height, err)
+		return cursor, fmt.Errorf("scanner: block %d: %w", height, err)
 	}
 	if cursor.Hash != "" && b.ParentHash != cursor.Hash {
-		return fmt.Errorf("%w: block %d parent %s does not extend cursor %s", errs.ErrChainInconsistent, height, b.ParentHash, cursor.Hash)
+		return cursor, fmt.Errorf("%w: block %d parent %s does not extend cursor %s", errs.ErrChainInconsistent, height, b.ParentHash, cursor.Hash)
 	}
 	recipients, err := s.store.ResolveRecipients(ctx, string(s.cfg.ChainID), transferTargets(b.Transfers))
 	if err != nil {
-		return fmt.Errorf("scanner: resolve recipients at %d: %w", height, err)
+		return cursor, fmt.Errorf("scanner: resolve recipients at %d: %w", height, err)
 	}
 	if len(recipients) > 0 {
-		configs, err := s.configs(ctx)
-		if err != nil {
-			return err
-		}
 		for _, tr := range b.Transfers {
 			account, ok := recipients[tr.To]
 			if !ok {
 				continue
 			}
-			cfg, ok := configs[tr.Asset]
+			cfg, ok := s.assetConfigs[tr.Asset]
 			if !ok {
 				continue // unsupported or custodian-mode asset
 			}
 			if err := s.openTransfer(ctx, cfg, tr, account, b); err != nil {
-				return err
+				return cursor, err
 			}
 		}
 	}
 	if err := s.store.RecordBlock(ctx, string(s.cfg.ChainID), b.Height, b.Hash); err != nil {
-		return fmt.Errorf("scanner: record block %d: %w", height, err)
+		return cursor, fmt.Errorf("scanner: record block %d: %w", height, err)
 	}
-	*cursor = Cursor{Height: b.Height, Hash: b.Hash}
-	if err := s.store.SaveCursor(ctx, string(s.cfg.ChainID), *cursor); err != nil {
-		return fmt.Errorf("scanner: save cursor %d: %w", height, err)
+	next := Cursor{Height: b.Height, Hash: b.Hash}
+	if err := s.store.SaveCursor(ctx, string(s.cfg.ChainID), next); err != nil {
+		return cursor, fmt.Errorf("scanner: save cursor %d: %w", height, err)
 	}
-	return nil
+	return next, nil
 }
 
-func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr adapters.Transfer, account string, b adapters.Block) error {
+func (s *Scanner) openTransfer(ctx context.Context, cfg domain.AssetPolicy, tr adapters.Transfer, account string, b adapters.Block) error {
 	id, err := tr.LogicalID(s.cfg.ChainID)
 	if err != nil {
 		return err
@@ -251,13 +245,8 @@ func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr adapters
 	if tr.Amount.Cmp(cfg.MinAmount) < 0 {
 		event = domain.EventObservedBelowMinimum
 	}
-	state, _, err := domain.Transition(domain.StateNone, event)
-	if err != nil {
-		return fmt.Errorf("scanner: initial state: %w", err)
-	}
-	result, err := s.store.OpenDeposit(ctx, OpenParams{
+	state, err := s.store.OpenDeposit(ctx, domain.OpenDepositParams{
 		TransferID: transferID,
-		State:      state,
 		Chain:      string(s.cfg.ChainID),
 		Asset:      tr.Asset,
 		Account:    account,
@@ -270,20 +259,17 @@ func (s *Scanner) openTransfer(ctx context.Context, cfg AssetConfig, tr adapters
 	if err != nil {
 		return fmt.Errorf("scanner: open deposit %s: %w", transferID, err)
 	}
-	if result.Created() {
+	switch state {
+	case domain.StateCreated:
+		return s.engine.Apply(ctx, transferID, event)
+	case domain.StateReorged, domain.StateReversed:
+		if err := s.store.ReincludeDeposit(ctx, transferID, b.Height, b.Hash); err != nil {
+			return fmt.Errorf("scanner: reinclude %s: %w", transferID, err)
+		}
+		return s.engine.Apply(ctx, transferID, domain.EventReincluded)
+	default:
 		return nil
 	}
-	existing := result.ExistingState()
-	if existing != domain.StateReorged && existing != domain.StateReversed {
-		return nil
-	}
-	if err := s.store.ReincludeDeposit(ctx, transferID, b.Height, b.Hash); err != nil {
-		return fmt.Errorf("scanner: reinclude %s: %w", transferID, err)
-	}
-	if err := s.engine.Apply(ctx, transferID, domain.EventReincluded); err != nil {
-		return fmt.Errorf("scanner: reinclude %s: %w", transferID, err)
-	}
-	return nil
 }
 
 // advanceDepth applies confirmation and finality thresholds.
@@ -295,25 +281,10 @@ func (s *Scanner) advanceDepth(ctx context.Context, head uint64) error {
 	if len(tracked) == 0 {
 		return nil
 	}
-	configs, err := s.configs(ctx)
-	if err != nil {
-		return err
-	}
+	processor := credit.NewDepositDepthProcessor(s.engine, s.assetConfigs)
 	for _, t := range tracked {
-		cfg, ok := configs[t.Asset]
-		if !ok || t.Height > head {
-			continue
-		}
-		depth := head - t.Height + 1
-		switch {
-		case t.State == domain.StatePending && depth >= cfg.NCredit:
-			if err := s.engine.Apply(ctx, t.TransferID, domain.EventDepthReached); err != nil {
-				return fmt.Errorf("scanner: credit %s: %w", t.TransferID, err)
-			}
-		case t.State == domain.StateCredited && depth >= cfg.NFinalize:
-			if err := s.engine.Apply(ctx, t.TransferID, domain.EventFinalityReached); err != nil {
-				return fmt.Errorf("scanner: finalize %s: %w", t.TransferID, err)
-			}
+		if _, err := processor.ProcessTrackedDepth(ctx, t, head); err != nil {
+			return fmt.Errorf("scanner: %w", err)
 		}
 	}
 	return nil
@@ -328,10 +299,7 @@ func (s *Scanner) expireReorged(ctx context.Context, head uint64) error {
 	if len(reorged) == 0 {
 		return nil
 	}
-	configs, err := s.configs(ctx)
-	if err != nil {
-		return err
-	}
+	processor := credit.NewDepositDepthProcessor(s.engine, s.assetConfigs)
 	for _, r := range reorged {
 		if r.Height == nil {
 			// Recover rows whose reorg marker was not written.
@@ -340,35 +308,17 @@ func (s *Scanner) expireReorged(ctx context.Context, head uint64) error {
 			}
 			continue
 		}
-		cfg, ok := configs[r.Asset]
-		if !ok || head-*r.Height < cfg.ReorgWindow {
-			continue
-		}
-		credited, err := s.store.HasCredit(ctx, r.TransferID)
+		result, err := processor.ProcessReorgedExpiry(ctx, r.TransferID, r.Asset, r.Height, head, s.store.HasCredit)
 		if err != nil {
-			return fmt.Errorf("scanner: credit check %s: %w", r.TransferID, err)
+			return fmt.Errorf("scanner: %w", err)
 		}
-		event := domain.EventWindowExpiredUncredited
-		if credited {
-			event = domain.EventWindowExpiredCredited
-		}
-		if err := s.engine.Apply(ctx, r.TransferID, event); err != nil {
-			return fmt.Errorf("scanner: expire %s: %w", r.TransferID, err)
+		if result.ShouldApply {
+			if err := s.engine.Apply(ctx, r.TransferID, result.Event); err != nil {
+				return fmt.Errorf("scanner: expire %s: %w", r.TransferID, err)
+			}
 		}
 	}
 	return nil
-}
-
-func (s *Scanner) configs(ctx context.Context) (map[string]AssetConfig, error) {
-	list, err := s.store.AssetConfigs(ctx, string(s.cfg.ChainID))
-	if err != nil {
-		return nil, fmt.Errorf("scanner: asset configs: %w", err)
-	}
-	configs := make(map[string]AssetConfig, len(list))
-	for _, c := range list {
-		configs[c.Asset] = c
-	}
-	return configs, nil
 }
 
 func transferTargets(transfers []adapters.Transfer) []string {

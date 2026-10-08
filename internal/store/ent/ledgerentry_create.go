@@ -50,6 +50,20 @@ func (_c *LedgerEntryCreate) SetRef(v string) *LedgerEntryCreate {
 	return _c
 }
 
+// SetReversesRef sets the "reverses_ref" field.
+func (_c *LedgerEntryCreate) SetReversesRef(v string) *LedgerEntryCreate {
+	_c.mutation.SetReversesRef(v)
+	return _c
+}
+
+// SetNillableReversesRef sets the "reverses_ref" field if the given value is not nil.
+func (_c *LedgerEntryCreate) SetNillableReversesRef(v *string) *LedgerEntryCreate {
+	if v != nil {
+		_c.SetReversesRef(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *LedgerEntryCreate) SetCreatedAt(v time.Time) *LedgerEntryCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -190,6 +204,10 @@ func (_c *LedgerEntryCreate) createSpec() (*LedgerEntry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Ref(); ok {
 		_spec.SetField(ledgerentry.FieldRef, field.TypeString, value)
 		_node.Ref = value
+	}
+	if value, ok := _c.mutation.ReversesRef(); ok {
+		_spec.SetField(ledgerentry.FieldReversesRef, field.TypeString, value)
+		_node.ReversesRef = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(ledgerentry.FieldCreatedAt, field.TypeTime, value)

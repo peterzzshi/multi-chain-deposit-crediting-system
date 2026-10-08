@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	"deposit-crediting/internal/adapters"
+	"deposit-crediting/internal/chaintest"
 )
 
-func setup(t *testing.T) (*adapters.Chain, adapters.Client, string) {
+func setup(t *testing.T) (*chaintest.Chain, adapters.Client, string) {
 	t.Helper()
-	c := adapters.NewChain()
-	srv := httptest.NewServer(adapters.Handler(c))
+	c := chaintest.NewChain()
+	srv := httptest.NewServer(chaintest.Handler(c))
 	t.Cleanup(srv.Close)
 	return c, adapters.New(srv.URL), srv.URL
 }

@@ -14,10 +14,10 @@ import (
 // error), so behavior-flow tests assert on state, not interactions.
 type fakeStore struct {
 	deposits map[string]View
-	entries  []domain.Entry
+	entries  []Entry
 	balances map[string]*big.Int
 	held     map[string]*big.Int
-	flagged  map[string]bool
+	versions map[string]int
 	holds    map[string]holdRule // chain/asset -> active hold rule
 }
 
@@ -31,7 +31,7 @@ func newFakeStore() *fakeStore {
 		deposits: map[string]View{},
 		balances: map[string]*big.Int{},
 		held:     map[string]*big.Int{},
-		flagged:  map[string]bool{},
+		versions: map[string]int{},
 		holds:    map[string]holdRule{},
 	}
 }
@@ -54,7 +54,7 @@ func (f *fakeStore) InTx(ctx context.Context, fn func(context.Context, Tx) error
 		v.Amount = new(big.Int).Set(v.Amount)
 		snapshot.deposits[k] = v
 	}
-	snapshot.entries = append([]domain.Entry(nil), f.entries...)
+	snapshot.entries = append([]Entry(nil), f.entries...)
 	snapshot.balances = make(map[string]*big.Int, len(f.balances))
 	for k, v := range f.balances {
 		snapshot.balances[k] = new(big.Int).Set(v)
@@ -63,9 +63,9 @@ func (f *fakeStore) InTx(ctx context.Context, fn func(context.Context, Tx) error
 	for k, v := range f.held {
 		snapshot.held[k] = new(big.Int).Set(v)
 	}
-	snapshot.flagged = make(map[string]bool, len(f.flagged))
-	for k, v := range f.flagged {
-		snapshot.flagged[k] = v
+	snapshot.versions = make(map[string]int, len(f.versions))
+	for k, v := range f.versions {
+		snapshot.versions[k] = v
 	}
 	if err := fn(ctx, &fakeTx{f: f}); err != nil {
 		*f = snapshot // roll back
@@ -102,7 +102,7 @@ func (t *fakeTx) SetCreditCycle(_ context.Context, transferID string, cycle int)
 	return nil
 }
 
-func (t *fakeTx) InsertEntry(_ context.Context, e domain.Entry) error {
+func (t *fakeTx) InsertEntry(_ context.Context, e Entry) error {
 	for _, existing := range t.f.entries {
 		if existing.Ref == e.Ref {
 			return errs.ErrDuplicateRef
@@ -121,6 +121,15 @@ func (t *fakeTx) HasEntry(_ context.Context, ref string) (bool, error) {
 	return false, nil
 }
 
+func (t *fakeTx) ReversalOf(_ context.Context, ref string) (bool, error) {
+	for _, e := range t.f.entries {
+		if e.Type == Reversal && e.ReversesRef == ref {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (t *fakeTx) BalanceForUpdate(_ context.Context, account, asset string) (Balance, error) {
 	k := account + "/" + asset
 	b := t.f.balances[k]
@@ -131,14 +140,24 @@ func (t *fakeTx) BalanceForUpdate(_ context.Context, account, asset string) (Bal
 	if h == nil {
 		h = new(big.Int)
 	}
-	return Balance{Amount: new(big.Int).Set(b), Held: new(big.Int).Set(h), Flagged: t.f.flagged[k]}, nil
+	return Balance{Amount: new(big.Int).Set(b), Held: new(big.Int).Set(h), Version: t.f.versions[k]}, nil
 }
 
-func (t *fakeTx) SetBalance(_ context.Context, account, asset string, balance *big.Int, flagged bool) error {
+func (t *fakeTx) SetBalance(_ context.Context, account, asset string, balance *big.Int) error {
 	k := account + "/" + asset
 	t.f.balances[k] = new(big.Int).Set(balance)
-	t.f.flagged[k] = flagged
+	t.f.versions[k]++
 	return nil
+}
+
+func (t *fakeTx) SetBalanceOptimistic(_ context.Context, account, asset string, balance *big.Int, expectedVersion int) (bool, error) {
+	k := account + "/" + asset
+	if t.f.versions[k] != expectedVersion {
+		return false, nil
+	}
+	t.f.balances[k] = new(big.Int).Set(balance)
+	t.f.versions[k]++
+	return true, nil
 }
 
 func (t *fakeTx) HoldsActive(_ context.Context, chain, asset string) (bool, *big.Int, error) {
@@ -185,9 +204,9 @@ func TestApplyCreditThenFinalize(t *testing.T) {
 		t.Fatalf("entries after credit = %d; want %d", got, want)
 	}
 	entry := store.entries[0]
-	if entry.Type != domain.Credit || entry.Ref != testTransfer || entry.Amount.Cmp(big.NewInt(100)) != 0 {
+	if entry.Type != Credit || entry.Ref != testTransfer || entry.Amount.Cmp(big.NewInt(100)) != 0 {
 		t.Errorf("entry = (%s, %s, %s); want (%s, %s, 100)",
-			entry.Type, entry.Ref, entry.Amount, domain.Credit, testTransfer)
+			entry.Type, entry.Ref, entry.Amount, Credit, testTransfer)
 	}
 	if got, want := store.balances["alice/ETH"].String(), "100"; got != want {
 		t.Errorf("balance = %s; want %s", got, want)
@@ -336,19 +355,16 @@ func TestReversalAfterSpendFlagsAccount(t *testing.T) {
 		t.Fatalf("entries = %d; want %d (credit, debit, reversal)", got, want)
 	}
 	reversal := store.entries[2]
-	if reversal.Type != domain.Reversal || reversal.Ref != "reversal:"+testTransfer {
+	if reversal.Type != Reversal || reversal.Ref != "reversal:"+testTransfer {
 		t.Errorf("reversal = (%s, %s); want (%s, reversal:%s)",
-			reversal.Type, reversal.Ref, domain.Reversal, testTransfer)
+			reversal.Type, reversal.Ref, Reversal, testTransfer)
 	}
 	if got, want := store.balances["alice/ETH"].String(), "-70"; got != want {
 		t.Errorf("balance = %s; want %s", got, want)
 	}
-	if !store.flagged["alice/ETH"] {
-		t.Error("account not flagged after negative reversal; want flagged")
-	}
 
-	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(1), "withdrawal:2"); !errors.Is(err, errs.ErrAccountFlagged) {
-		t.Errorf("Debit() on flagged account error = %v; want errs.ErrAccountFlagged", err)
+	if err := engine.Debit(ctx, "alice", "ETH", big.NewInt(1), "withdrawal:2"); !errors.Is(err, errs.ErrInsufficientFunds) {
+		t.Errorf("Debit() on negative balance error = %v; want errs.ErrInsufficientFunds", err)
 	}
 }
 

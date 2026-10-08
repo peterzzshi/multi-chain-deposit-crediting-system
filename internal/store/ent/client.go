@@ -12,7 +12,6 @@ import (
 	"deposit-crediting/internal/store/ent/migrate"
 
 	"deposit-crediting/internal/store/ent/accountbalance"
-	"deposit-crediting/internal/store/ent/assetconfig"
 	"deposit-crediting/internal/store/ent/canonicalblock"
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
@@ -33,8 +32,6 @@ type Client struct {
 	Schema *migrate.Schema
 	// AccountBalance is the client for interacting with the AccountBalance builders.
 	AccountBalance *AccountBalanceClient
-	// AssetConfig is the client for interacting with the AssetConfig builders.
-	AssetConfig *AssetConfigClient
 	// CanonicalBlock is the client for interacting with the CanonicalBlock builders.
 	CanonicalBlock *CanonicalBlockClient
 	// ChainCursor is the client for interacting with the ChainCursor builders.
@@ -61,7 +58,6 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AccountBalance = NewAccountBalanceClient(c.config)
-	c.AssetConfig = NewAssetConfigClient(c.config)
 	c.CanonicalBlock = NewCanonicalBlockClient(c.config)
 	c.ChainCursor = NewChainCursorClient(c.config)
 	c.Deposit = NewDepositClient(c.config)
@@ -162,7 +158,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:            ctx,
 		config:         cfg,
 		AccountBalance: NewAccountBalanceClient(cfg),
-		AssetConfig:    NewAssetConfigClient(cfg),
 		CanonicalBlock: NewCanonicalBlockClient(cfg),
 		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
@@ -190,7 +185,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:            ctx,
 		config:         cfg,
 		AccountBalance: NewAccountBalanceClient(cfg),
-		AssetConfig:    NewAssetConfigClient(cfg),
 		CanonicalBlock: NewCanonicalBlockClient(cfg),
 		ChainCursor:    NewChainCursorClient(cfg),
 		Deposit:        NewDepositClient(cfg),
@@ -227,8 +221,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.ExposureState, c.LedgerEntry, c.SourceEvent,
+		c.AccountBalance, c.CanonicalBlock, c.ChainCursor, c.Deposit, c.DepositAddress,
+		c.ExposureState, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Use(hooks...)
 	}
@@ -238,8 +232,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AccountBalance, c.AssetConfig, c.CanonicalBlock, c.ChainCursor, c.Deposit,
-		c.DepositAddress, c.ExposureState, c.LedgerEntry, c.SourceEvent,
+		c.AccountBalance, c.CanonicalBlock, c.ChainCursor, c.Deposit, c.DepositAddress,
+		c.ExposureState, c.LedgerEntry, c.SourceEvent,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -250,8 +244,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AccountBalanceMutation:
 		return c.AccountBalance.mutate(ctx, m)
-	case *AssetConfigMutation:
-		return c.AssetConfig.mutate(ctx, m)
 	case *CanonicalBlockMutation:
 		return c.CanonicalBlock.mutate(ctx, m)
 	case *ChainCursorMutation:
@@ -401,139 +393,6 @@ func (c *AccountBalanceClient) mutate(ctx context.Context, m *AccountBalanceMuta
 		return (&AccountBalanceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AccountBalance mutation op: %q", m.Op())
-	}
-}
-
-// AssetConfigClient is a client for the AssetConfig schema.
-type AssetConfigClient struct {
-	config
-}
-
-// NewAssetConfigClient returns a client for the AssetConfig from the given config.
-func NewAssetConfigClient(c config) *AssetConfigClient {
-	return &AssetConfigClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `assetconfig.Hooks(f(g(h())))`.
-func (c *AssetConfigClient) Use(hooks ...Hook) {
-	c.hooks.AssetConfig = append(c.hooks.AssetConfig, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `assetconfig.Intercept(f(g(h())))`.
-func (c *AssetConfigClient) Intercept(interceptors ...Interceptor) {
-	c.inters.AssetConfig = append(c.inters.AssetConfig, interceptors...)
-}
-
-// Create returns a builder for creating a AssetConfig entity.
-func (c *AssetConfigClient) Create() *AssetConfigCreate {
-	mutation := newAssetConfigMutation(c.config, OpCreate)
-	return &AssetConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of AssetConfig entities.
-func (c *AssetConfigClient) CreateBulk(builders ...*AssetConfigCreate) *AssetConfigCreateBulk {
-	return &AssetConfigCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *AssetConfigClient) MapCreateBulk(slice any, setFunc func(*AssetConfigCreate, int)) *AssetConfigCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &AssetConfigCreateBulk{err: fmt.Errorf("calling to AssetConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*AssetConfigCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &AssetConfigCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for AssetConfig.
-func (c *AssetConfigClient) Update() *AssetConfigUpdate {
-	mutation := newAssetConfigMutation(c.config, OpUpdate)
-	return &AssetConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *AssetConfigClient) UpdateOne(_m *AssetConfig) *AssetConfigUpdateOne {
-	mutation := newAssetConfigMutation(c.config, OpUpdateOne, withAssetConfig(_m))
-	return &AssetConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *AssetConfigClient) UpdateOneID(id int) *AssetConfigUpdateOne {
-	mutation := newAssetConfigMutation(c.config, OpUpdateOne, withAssetConfigID(id))
-	return &AssetConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for AssetConfig.
-func (c *AssetConfigClient) Delete() *AssetConfigDelete {
-	mutation := newAssetConfigMutation(c.config, OpDelete)
-	return &AssetConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *AssetConfigClient) DeleteOne(_m *AssetConfig) *AssetConfigDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *AssetConfigClient) DeleteOneID(id int) *AssetConfigDeleteOne {
-	builder := c.Delete().Where(assetconfig.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &AssetConfigDeleteOne{builder}
-}
-
-// Query returns a query builder for AssetConfig.
-func (c *AssetConfigClient) Query() *AssetConfigQuery {
-	return &AssetConfigQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeAssetConfig},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a AssetConfig entity by its id.
-func (c *AssetConfigClient) Get(ctx context.Context, id int) (*AssetConfig, error) {
-	return c.Query().Where(assetconfig.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *AssetConfigClient) GetX(ctx context.Context, id int) *AssetConfig {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *AssetConfigClient) Hooks() []Hook {
-	return c.hooks.AssetConfig
-}
-
-// Interceptors returns the client interceptors.
-func (c *AssetConfigClient) Interceptors() []Interceptor {
-	return c.inters.AssetConfig
-}
-
-func (c *AssetConfigClient) mutate(ctx context.Context, m *AssetConfigMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&AssetConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&AssetConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&AssetConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&AssetConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown AssetConfig mutation op: %q", m.Op())
 	}
 }
 
@@ -814,13 +673,13 @@ func NewDepositClient(c config) *DepositClient {
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `domain.Hooks(f(g(h())))`.
+// A call to `Use(f, g, h)` equals to `deposit.Hooks(f(g(h())))`.
 func (c *DepositClient) Use(hooks ...Hook) {
 	c.hooks.Deposit = append(c.hooks.Deposit, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `domain.Intercept(f(g(h())))`.
+// A call to `Intercept(f, g, h)` equals to `deposit.Intercept(f(g(h())))`.
 func (c *DepositClient) Intercept(interceptors ...Interceptor) {
 	c.inters.Deposit = append(c.inters.Deposit, interceptors...)
 }
@@ -882,7 +741,7 @@ func (c *DepositClient) DeleteOne(_m *Deposit) *DepositDeleteOne {
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
 func (c *DepositClient) DeleteOneID(id int) *DepositDeleteOne {
-	builder := c.Delete().Where(deposit.IDEQ(id))
+	builder := c.Delete().Where(deposit.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
 	return &DepositDeleteOne{builder}
@@ -899,7 +758,7 @@ func (c *DepositClient) Query() *DepositQuery {
 
 // Get returns a Deposit entity by its id.
 func (c *DepositClient) Get(ctx context.Context, id int) (*Deposit, error) {
-	return c.Query().Where(deposit.IDEQ(id)).Only(ctx)
+	return c.Query().Where(deposit.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
@@ -1471,11 +1330,11 @@ func (c *SourceEventClient) mutate(ctx context.Context, m *SourceEventMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, ExposureState, LedgerEntry, SourceEvent []ent.Hook
+		AccountBalance, CanonicalBlock, ChainCursor, Deposit, DepositAddress,
+		ExposureState, LedgerEntry, SourceEvent []ent.Hook
 	}
 	inters struct {
-		AccountBalance, AssetConfig, CanonicalBlock, ChainCursor, Deposit,
-		DepositAddress, ExposureState, LedgerEntry, SourceEvent []ent.Interceptor
+		AccountBalance, CanonicalBlock, ChainCursor, Deposit, DepositAddress,
+		ExposureState, LedgerEntry, SourceEvent []ent.Interceptor
 	}
 )

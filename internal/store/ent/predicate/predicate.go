@@ -9,9 +9,6 @@ import (
 // AccountBalance is the predicate function for accountbalance builders.
 type AccountBalance func(*sql.Selector)
 
-// AssetConfig is the predicate function for assetconfig builders.
-type AssetConfig func(*sql.Selector)
-
 // CanonicalBlock is the predicate function for canonicalblock builders.
 type CanonicalBlock func(*sql.Selector)
 

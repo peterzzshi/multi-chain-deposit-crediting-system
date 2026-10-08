@@ -20,60 +20,54 @@ services:
       context: .
       args:
         SERVICE: migrate
+    image: multi-chain-deposit-crediting-system-migrate:latest
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
 
-  chainstub:
+  chain-node:
     build:
       context: .
       args:
         SERVICE: chain-node
+    image: multi-chain-deposit-crediting-system-chain-node:latest
     environment:
       LISTEN_ADDR: :9100
     ports:
       - "9100:9100"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/v1/head"]
-      interval: 2s
-      timeout: 2s
-      retries: 5
 
-  custodianstub:
+  custodian-api:
     build:
       context: .
       args:
         SERVICE: custodian-api
+    image: multi-chain-deposit-crediting-system-custodian-api:latest
     environment:
       LISTEN_ADDR: :9300
     ports:
       - "9300:9300"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9300/v1/deposits"]
-      interval: 2s
-      timeout: 2s
-      retries: 5
 
   server:
     build:
       context: .
       args:
         SERVICE: server
+    image: multi-chain-deposit-crediting-system-server:latest
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
-      CHAIN_API_URL: http://chainstub:9100
-      CHAIN_ID: stubchain
+      CHAINS_CONFIG: /configs/chains.json
       ASSETS_CONFIG: /configs/assets.json
       LISTEN_ADDR: :9200
+      PROVIDER: custodianA
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      chainstub:
-        condition: service_healthy
+      chain-node:
+        condition: service_started
     ports:
       - "9200:9200"
 
@@ -82,42 +76,44 @@ services:
       context: .
       args:
         SERVICE: scanner
+    image: multi-chain-deposit-crediting-system-scanner:latest
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
-      CHAIN_API_URL: http://chainstub:9100
-      CHAIN_ID: stubchain
+      CHAINS_CONFIG: /configs/chains.json
       ASSETS_CONFIG: /configs/assets.json
-      POLL_INTERVAL: 500ms
+      START_HEIGHT: "0"
+      MAX_BATCH: "100"
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      chainstub:
-        condition: service_healthy
+      chain-node:
+        condition: service_started
 
   worker:
     build:
       context: .
       args:
         SERVICE: worker
+    image: multi-chain-deposit-crediting-system-worker:latest
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/deposit_crediting?sslmode=disable
-      CHAIN_API_URL: http://chainstub:9100
-      CUSTODIAN_API_URL: http://custodianstub:9300
-      CHAIN_ID: stubchain
+      CUSTODIAN_API_URL: http://custodian-api:9300
       PROVIDER: custodianA
+      CHAINS_CONFIG: /configs/chains.json
       ASSETS_CONFIG: /configs/assets.json
-      POLL_INTERVAL: 2s
+      RECONCILE_INTERVAL_MS: 30000
+      RECONCILE_OVERLAP_MS: 5000
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      chainstub:
-        condition: service_healthy
-      custodianstub:
-        condition: service_healthy
+      chain-node:
+        condition: service_started
+      custodian-api:
+        condition: service_started
 
 volumes:
   pgdata:

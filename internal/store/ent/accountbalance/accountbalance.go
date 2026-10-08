@@ -19,8 +19,6 @@ const (
 	FieldBalance = "balance"
 	// FieldHeld holds the string denoting the held field in the database.
 	FieldHeld = "held"
-	// FieldFlagged holds the string denoting the flagged field in the database.
-	FieldFlagged = "flagged"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
 	// Table holds the table name of the accountbalance in the database.
@@ -34,7 +32,6 @@ var Columns = []string{
 	FieldAsset,
 	FieldBalance,
 	FieldHeld,
-	FieldFlagged,
 	FieldVersion,
 }
 
@@ -57,8 +54,6 @@ var (
 	DefaultBalance string
 	// DefaultHeld holds the default value on creation for the "held" field.
 	DefaultHeld string
-	// DefaultFlagged holds the default value on creation for the "flagged" field.
-	DefaultFlagged bool
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 )
@@ -89,11 +84,6 @@ func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 // ByHeld orders the results by the held field.
 func ByHeld(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHeld, opts...).ToFunc()
-}
-
-// ByFlagged orders the results by the flagged field.
-func ByFlagged(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFlagged, opts...).ToFunc()
 }
 
 // ByVersion orders the results by the version field.

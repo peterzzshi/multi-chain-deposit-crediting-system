@@ -4,7 +4,6 @@ package ent
 
 import (
 	"deposit-crediting/internal/store/ent/accountbalance"
-	"deposit-crediting/internal/store/ent/assetconfig"
 	"deposit-crediting/internal/store/ent/canonicalblock"
 	"deposit-crediting/internal/store/ent/chaincursor"
 	"deposit-crediting/internal/store/ent/deposit"
@@ -38,44 +37,10 @@ func init() {
 	accountbalanceDescHeld := accountbalanceFields[3].Descriptor()
 	// accountbalance.DefaultHeld holds the default value on creation for the held field.
 	accountbalance.DefaultHeld = accountbalanceDescHeld.Default.(string)
-	// accountbalanceDescFlagged is the schema descriptor for flagged field.
-	accountbalanceDescFlagged := accountbalanceFields[4].Descriptor()
-	// accountbalance.DefaultFlagged holds the default value on creation for the flagged field.
-	accountbalance.DefaultFlagged = accountbalanceDescFlagged.Default.(bool)
 	// accountbalanceDescVersion is the schema descriptor for version field.
-	accountbalanceDescVersion := accountbalanceFields[5].Descriptor()
+	accountbalanceDescVersion := accountbalanceFields[4].Descriptor()
 	// accountbalance.DefaultVersion holds the default value on creation for the version field.
 	accountbalance.DefaultVersion = accountbalanceDescVersion.Default.(int)
-	assetconfigFields := schema.AssetConfig{}.Fields()
-	_ = assetconfigFields
-	// assetconfigDescChain is the schema descriptor for chain field.
-	assetconfigDescChain := assetconfigFields[0].Descriptor()
-	// assetconfig.ChainValidator is a validator for the "chain" field. It is called by the builders before save.
-	assetconfig.ChainValidator = assetconfigDescChain.Validators[0].(func(string) error)
-	// assetconfigDescAsset is the schema descriptor for asset field.
-	assetconfigDescAsset := assetconfigFields[1].Descriptor()
-	// assetconfig.AssetValidator is a validator for the "asset" field. It is called by the builders before save.
-	assetconfig.AssetValidator = assetconfigDescAsset.Validators[0].(func(string) error)
-	// assetconfigDescDecimals is the schema descriptor for decimals field.
-	assetconfigDescDecimals := assetconfigFields[2].Descriptor()
-	// assetconfig.DecimalsValidator is a validator for the "decimals" field. It is called by the builders before save.
-	assetconfig.DecimalsValidator = assetconfigDescDecimals.Validators[0].(func(int) error)
-	// assetconfigDescMinAmount is the schema descriptor for min_amount field.
-	assetconfigDescMinAmount := assetconfigFields[4].Descriptor()
-	// assetconfig.DefaultMinAmount holds the default value on creation for the min_amount field.
-	assetconfig.DefaultMinAmount = assetconfigDescMinAmount.Default.(string)
-	// assetconfigDescNCredit is the schema descriptor for n_credit field.
-	assetconfigDescNCredit := assetconfigFields[5].Descriptor()
-	// assetconfig.NCreditValidator is a validator for the "n_credit" field. It is called by the builders before save.
-	assetconfig.NCreditValidator = assetconfigDescNCredit.Validators[0].(func(int) error)
-	// assetconfigDescNFinalize is the schema descriptor for n_finalize field.
-	assetconfigDescNFinalize := assetconfigFields[6].Descriptor()
-	// assetconfig.NFinalizeValidator is a validator for the "n_finalize" field. It is called by the builders before save.
-	assetconfig.NFinalizeValidator = assetconfigDescNFinalize.Validators[0].(func(int) error)
-	// assetconfigDescReorgWindow is the schema descriptor for reorg_window field.
-	assetconfigDescReorgWindow := assetconfigFields[7].Descriptor()
-	// assetconfig.ReorgWindowValidator is a validator for the "reorg_window" field. It is called by the builders before save.
-	assetconfig.ReorgWindowValidator = assetconfigDescReorgWindow.Validators[0].(func(int) error)
 	canonicalblockFields := schema.CanonicalBlock{}.Fields()
 	_ = canonicalblockFields
 	// canonicalblockDescChain is the schema descriptor for chain field.
@@ -126,6 +91,14 @@ func init() {
 	depositDescAddress := depositFields[4].Descriptor()
 	// deposit.AddressValidator is a validator for the "address" field. It is called by the builders before save.
 	deposit.AddressValidator = depositDescAddress.Validators[0].(func(string) error)
+	// depositDescMode is the schema descriptor for mode field.
+	depositDescMode := depositFields[6].Descriptor()
+	// deposit.ModeValidator is a validator for the "mode" field. It is called by the builders before save.
+	deposit.ModeValidator = depositDescMode.Validators[0].(func(string) error)
+	// depositDescState is the schema descriptor for state field.
+	depositDescState := depositFields[7].Descriptor()
+	// deposit.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	deposit.StateValidator = depositDescState.Validators[0].(func(string) error)
 	// depositDescCreditCycle is the schema descriptor for credit_cycle field.
 	depositDescCreditCycle := depositFields[8].Descriptor()
 	// deposit.DefaultCreditCycle holds the default value on creation for the credit_cycle field.
@@ -201,7 +174,7 @@ func init() {
 	// ledgerentry.RefValidator is a validator for the "ref" field. It is called by the builders before save.
 	ledgerentry.RefValidator = ledgerentryDescRef.Validators[0].(func(string) error)
 	// ledgerentryDescCreatedAt is the schema descriptor for created_at field.
-	ledgerentryDescCreatedAt := ledgerentryFields[5].Descriptor()
+	ledgerentryDescCreatedAt := ledgerentryFields[6].Descriptor()
 	// ledgerentry.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ledgerentry.DefaultCreatedAt = ledgerentryDescCreatedAt.Default.(func() time.Time)
 	sourceeventFields := schema.SourceEvent{}.Fields()

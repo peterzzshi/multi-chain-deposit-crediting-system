@@ -12,31 +12,30 @@ import (
 
 // Reconciler polls the custodian API and feeds claims through the ingestor.
 type Reconciler struct {
+	cfg      Config
 	provider Provider
 	ing      *Ingestor
-	solvency *SolvencyChecker
+	store    Store
+	assets   []string // assets to check for this chain
 	interval time.Duration
 	overlap  time.Duration
 	since    time.Time // in-memory; zero on boot = idempotent full backfill
 }
 
-func NewReconciler(p Provider, ing *Ingestor, interval, overlap time.Duration) *Reconciler {
-	return &Reconciler{provider: p, ing: ing, interval: interval, overlap: overlap}
-}
-
-func (r *Reconciler) WithSolvency(s *SolvencyChecker) *Reconciler {
-	r.solvency = s
-	return r
+func NewReconciler(cfg Config, p Provider, ing *Ingestor, st Store, assets []string, interval, overlap time.Duration) *Reconciler {
+	return &Reconciler{
+		cfg:      cfg,
+		provider: p,
+		ing:      ing,
+		store:    st,
+		assets:   assets,
+		interval: interval,
+		overlap:  overlap,
+	}
 }
 
 // Run polls until ctx is done; tick errors are logged and retried.
 func (r *Reconciler) Run(ctx context.Context) error {
-	if r.interval <= 0 {
-		return fmt.Errorf("reconcile: interval must be positive")
-	}
-	if r.overlap < 0 {
-		return fmt.Errorf("reconcile: overlap must not be negative")
-	}
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 	for {
@@ -53,12 +52,15 @@ func (r *Reconciler) Run(ctx context.Context) error {
 
 // Tick fetches claims since the last poll (minus the overlap) and
 // reprocesses them; the Ingestor's dedup makes overlap reprocessing safe.
+// After processing claims, verifies vault solvency.
 func (r *Reconciler) Tick(ctx context.Context) error {
+	// Stamp before the fetch: a claim observed during the round trip must
+	// fall on or after the next window's start, not before it.
+	fetchedAt := time.Now()
 	claims, err := r.provider.FetchDeposits(ctx, r.since.Add(-r.overlap))
 	if err != nil {
 		return fmt.Errorf("reconcile: fetch deposits: %w", err)
 	}
-	r.since = time.Now()
 	for _, cl := range claims {
 		if err := r.ing.Handle(ctx, cl); err != nil {
 			if errors.Is(err, errs.ErrClaimNotOnChain) {
@@ -67,15 +69,24 @@ func (r *Reconciler) Tick(ctx context.Context) error {
 			return fmt.Errorf("reconcile: claim %s: %w", cl.ProviderEventID, err)
 		}
 	}
-	if r.solvency != nil {
-		discrepancies, err := r.solvency.Check(ctx)
+	// Advance only once every claim is handled, so a mid-batch error
+	// re-fetches the unprocessed remainder instead of skipping it.
+	r.since = fetchedAt
+
+	// Verify solvency: ledger totals must not exceed vault totals.
+	for _, asset := range r.assets {
+		ledger, err := r.store.LedgerTotal(ctx, string(r.cfg.ChainID), asset)
 		if err != nil {
-			return fmt.Errorf("reconcile: solvency: %w", err)
+			return fmt.Errorf("reconcile: ledger total %s: %w", asset, err)
 		}
-		for _, d := range discrepancies {
+		vault, err := r.provider.FetchVaultTotal(ctx, string(r.cfg.ChainID), asset)
+		if err != nil {
+			return fmt.Errorf("reconcile: vault total %s: %w", asset, err)
+		}
+		if ledger.Cmp(vault) > 0 {
 			slog.Error("vault solvency discrepancy",
-				"chain", d.Chain, "asset", d.Asset,
-				"ledger", d.LedgerTotal, "vault", d.VaultTotal)
+				"chain", r.cfg.ChainID, "asset", asset,
+				"ledger", ledger, "vault", vault)
 		}
 	}
 	return nil
